@@ -1,0 +1,4078 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-YG4RV4W27S"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-YG4RV4W27S');
+</script>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Séchoirs</title>
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌽</text></svg>">
+
+
+<!-- Dépendances -->
+<script src="libs/jszip.min.js"></script>
+<script src="libs/FileSaver.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+
+<style>
+:root{
+  --bg:#fff5f5;
+  --panel:#ffffff;
+  --sidebar-bg:#ffe5d9;
+  --text:#333;
+  --muted-text:#555;
+  --shadow:rgba(0,0,0,0.1);
+  --overlay:rgba(0,0,0,0.8);
+  --table-border:#eee;
+  --thumb-border:#ccc;
+
+  /* Thème (orange par défaut) */
+  --accent:#ff7043;
+  --accent-contrast:#fff;
+  --accent-darker:#e64a19;
+  --accent-muted:#ffccbc;
+  --danger:#d84315;
+
+  /* Couleurs des lignes du tableau */
+  --row-even:#ffe5d9;
+  --row-odd:#fff5f5;
+}
+
+*{box-sizing:border-box}
+
+body{
+  font-family:"Segoe UI",Tahoma,Geneva,Verdana,sans-serif;
+  background:var(--bg);color:var(--text);margin:0;padding:0;
+  display:flex;height:100vh;overflow:hidden;
+}
+
+/* Alerte réseau */
+#netAlert{
+  display:none;position:fixed;top:0;left:0;right:0;z-index:3000;
+  background:var(--accent-muted);color:var(--danger);
+  padding:8px;text-align:center;font-weight:bold;
+}
+
+/* Sidebar */
+#sidebar{
+  background:var(--sidebar-bg);border-right:2px solid var(--accent);
+  padding:20px 10px;overflow-y:auto;z-index:1000;
+  width:auto;min-width:200px;max-width:500px;
+}
+#sidebar h2{
+  color:var(--accent);font-size:18px;font-weight:bold;text-transform:uppercase;
+  margin:0 0 12px 0;padding-left:5px;display:flex;align-items:center;gap:6px;
+}
+#folderTree ul{list-style:none;padding-left:20px;margin:0;}
+#folderTree li{cursor:pointer;margin:5px 0;}
+.folder-toggle{font-weight:bold;margin-right:5px;cursor:pointer;color:var(--accent);}
+.folder-name{cursor:pointer;}
+.active-folder {
+  background: var(--accent-muted);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-weight: 600;
+  color: var(--accent-darker);
+  box-shadow: none;
+}
+
+
+
+/* Main */
+#main{
+  flex:1;
+  padding:10px 20px;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  position:relative; /* ✅ nécessaire pour le centrage */
+}
+.header{display:flex;align-items:center;justify-content:center;position:relative;margin-bottom:15px;}
+.header .logo{height:60px;width:auto;}
+#fileNameContainer{position:absolute;right:0;top:0;text-align:right;}
+#fileName,#lineCount{color:var(--danger);}
+#fileName{font-size:20px;font-weight:bold;white-space:nowrap;max-width:250px;overflow:hidden;text-overflow:ellipsis;display:none;}
+#lineCount{font-size:12px;display:none;}
+
+/* Contrôles */
+.controls{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;align-items:center;}
+.controls button{
+  background:var(--accent);color:var(--accent-contrast);
+  border:none;cursor:pointer;font-weight:bold;
+  padding:6px 12px;border-radius:6px;font-size:13px;transition:0.3s;
+}
+.controls button:hover{background:var(--accent-darker);transform:scale(1.05);}
+
+/* --- Champs date modernisés --- */
+.date-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border: 2px solid var(--table-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  transition: all 0.3s ease;
+}
+
+/* 📅 Icône calendrier plus grande et cliquable */
+.date-field span {
+  font-size: 24px; /* plus visible */
+  color: var(--accent);
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.2s, color 0.2s;
+}
+.date-field span:hover {
+  transform: scale(1.2);
+  color: var(--accent-darker);
+}
+
+/* Masque le champ tant qu’aucune date n’est choisie */
+/* Flatpickr remplace les inputs type="date" par .flatpickr-input */
+.date-field .flatpickr-input {
+  display: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 15px;
+  color: var(--text);
+  padding: 6px 2px;
+}
+.date-field.has-date .flatpickr-input {
+  display: inline-block;
+}
+
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+}
+
+/* --- Style équilibré du calendrier Flatpickr --- */
+.flatpickr-calendar {
+  font-size: 1em !important;          /* ✅ police normale (plus de chevauchement) */
+  transform: scale(1.15);             /* ✅ zoom global du calendrier (plus grand sans grossir le texte) */
+  transform-origin: top left;         /* garde l’ouverture propre près de l’icône */
+  box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+  border-radius: 12px;
+  z-index: 3000 !important;
+}
+
+.flatpickr-day {
+  width: 2.4em !important;
+  height: 2.4em !important;
+  line-height: 2.4em !important;
+  font-size: 0.95em !important;       /* ✅ jours un peu plus petits, lisibles */
+  font-weight: 500;
+}
+
+.flatpickr-months .flatpickr-month {
+  font-size: 1em;                     /* ✅ mois et navigation lisibles mais pas énormes */
+  font-weight: bold;
+}
+
+.flatpickr-weekday {
+  font-size: 0.85em;                  /* ✅ noms des jours ajustés */
+  color: var(--accent-darker);
+  font-weight: 600;
+}
+
+
+
+
+/* Tableau */
+#tableWrapper{flex:1;overflow:auto;}
+#tableContainer{overflow:auto;border-radius:8px;box-shadow:0 4px 12px var(--shadow);background:var(--panel);}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px;}
+thead th,tbody td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--table-border);white-space:nowrap;}
+thead th{
+  position:sticky;top:0;z-index:2;background:var(--accent);
+  color:var(--accent-contrast);font-weight:bold;text-transform:uppercase;cursor:pointer;
+}
+tbody tr:nth-child(even){background:var(--row-even);}
+tbody tr:nth-child(odd){background:var(--row-odd);}
+tbody tr:hover{background:var(--accent-muted);}
+.sort-arrow{margin-left:5px;font-size:11px;color:var(--accent-contrast);}
+
+/* Cellule actions + boutons survol */
+td.action-cell{display:flex;align-items:center;gap:8px;}
+.action-btn{
+  background:var(--accent);color:var(--accent-contrast);border:none;cursor:pointer;
+  font-weight:bold;padding:6px 12px;border-radius:6px;font-size:12px;transition:0.2s;
+  margin-right:6px;opacity:0;visibility:hidden;
+}
+tbody tr:hover .action-btn{opacity:1;visibility:visible;}
+.action-btn:hover{background:var(--accent-darker);transform:scale(1.05);}
+
+/* Miniatures JPG */
+#csvTable td img{
+  max-width:120px;
+  cursor:pointer;border-radius:6px;border:1px solid var(--thumb-border);
+  transition:transform 0.2s,box-shadow 0.2s;margin-right:6px;
+}
+#csvTable td img:hover{transform:scale(1.08);box-shadow:0 0 8px var(--shadow);}
+
+/* Flèche animée */
+@keyframes bounceLeft {0%,100% { transform: translateX(0);}50% { transform: translateX(-8px);} }
+.arrow-hint {display:inline-block;margin-right:8px;color:var(--accent-darker);
+  font-size:22px;animation:bounceLeft 1s infinite;}
+
+/* Spinner */
+
+#scanIndicator {
+  display: none;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 70px;
+
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: bold;
+
+  background: var(--accent-muted);
+  color: var(--accent-darker);
+
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  z-index: 2000;
+}
+
+  
+#spinner{
+  display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:40px;height:40px;border:6px solid #f3f3f3;border-top:6px solid var(--accent);border-radius:50%;
+}
+
+/* Modale images */
+.modal{
+  display:none;                 /* ✅ fermée par défaut */
+  position:fixed;
+  z-index:1300;
+  inset:0;                      /* ✅ remplace left/top/width/height */
+  background-color:var(--overlay);
+
+  /* ✅ centrage via flex */
+  justify-content:center;
+  align-items:center;
+  flex-direction:column;
+
+  padding:20px;
+  box-sizing:border-box;
+}
+
+.modal .close{
+  position:absolute;
+  top:15px;
+  right:25px;
+  color:#fff;
+  font-size:30px;
+  cursor:pointer;
+}
+
+.modal iframe{
+  width:min(90vw, 1200px);
+  height:80vh;
+  border:none;
+  border-radius:10px;
+  background:#000;
+}
+
+#modalVideo{
+  width:min(90vw, 1200px);
+  height:80vh;
+  border:none;
+  border-radius:10px;
+  background:#000;
+}
+
+#modalImg{
+  display:block;
+  max-width:min(90vw, 1200px);
+  max-height:80vh;
+  border-radius:10px;
+  background:#000;
+  object-fit:contain;
+}
+
+.modal-actions{margin-top:15px;display:flex;justify-content:center;gap:10px;}
+.modal-actions button{background:var(--accent);color:#fff;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;}
+.modal-actions button:hover{background:var(--accent-darker);}
+
+
+/* Overlay ZIP */
+#zipOverlay{
+  display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,0.4);z-index:1400;justify-content:center;align-items:center;
+}
+#zipBox{
+  background:var(--accent-muted);color:var(--text);padding:20px 25px;border-radius:12px;
+  text-align:center;width:300px;box-shadow:0 4px 12px rgba(0,0,0,0.3);position:relative;
+}
+#zipBox h2{margin:0 0 10px 0;color:var(--accent);font-size:18px;}
+#zipFileName{font-size:13px;margin-bottom:15px;color:var(--muted-text);word-break:break-word;}
+#zipProgressBar{width:100%;height:22px;background:#eee;border-radius:11px;overflow:hidden;}
+#zipProgress{
+  height:100%;width:0;background:var(--accent);transition:width 0.3s;
+  display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:13px;
+}
+#zipCounter{margin-top:10px;font-size:12px;color:var(--text);}
+#zipTime{margin-top:5px;font-size:12px;color:var(--muted-text);}
+#zipClose{
+  position:absolute;top:8px;right:12px;font-size:18px;font-weight:bold;color:var(--accent);cursor:pointer;
+}
+#zipClose:hover{color:var(--accent-darker);}
+
+/* Menu secret (thèmes) */
+#secretBtn {
+  position: fixed;bottom: 10px;right: 10px;width: 25px;height: 25px;
+  opacity: 0;cursor: pointer;z-index: 2000;
+}
+#themeMenu {
+  display:none;position:fixed;bottom:50px;right:10px;background: var(--panel);
+  border:2px solid var(--accent);border-radius:8px;box-shadow:0 4px 12px var(--shadow);
+  padding:10px;z-index:2001;min-width:150px;
+}
+#themeMenu h3 {margin:0 0 8px 0;font-size:14px;color: var(--accent);}
+#themeMenu .closeMenu {position:absolute;top:5px;right:8px;font-size:14px;cursor:pointer;color:var(--accent);}
+#themeMenu .closeMenu:hover {color:var(--accent-darker);}
+#themeMenu button {
+  display:block;width:100%;margin:4px 0;padding:6px;border:none;border-radius:6px;
+  background: var(--accent);color: var(--accent-contrast);cursor:pointer;font-size:13px;
+}
+#themeMenu button:hover {background: var(--accent-darker);}
+.flame {
+  display: inline-flex;          /* 🔄 pour être sur la même ligne que 📝 */
+  justify-content: center;
+  align-items: center;
+  font-size: 20px;               /* taille harmonisée */
+  line-height: 1;
+  vertical-align: middle;
+  animation: flicker 0.6s infinite alternate,
+             sway 1.2s infinite ease-in-out;
+  text-shadow:
+    0 0 4px rgba(255, 140, 0, 0.8),
+    0 0 8px rgba(255, 80, 0, 0.7),
+    0 0 12px rgba(255, 30, 0, 0.5);
+}
+
+
+/* Petite flamme pour les dossiers dans l’arborescence */
+.flame-folder {
+  display: inline;               
+  font-size: 14px;               
+  margin-right: 1px;             
+  line-height: 1;                
+  vertical-align: middle;
+  text-shadow: 
+    0 0 3px rgba(255, 140, 0, 0.8),
+    0 0 6px rgba(255, 80, 0, 0.7);
+  animation: flicker 1s infinite alternate;
+  margin-right: 4px;
+}
+
+.note {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 20px;               /* même taille que 🔥 */
+  vertical-align: middle;
+  margin-left: 4px;              /* petit espace entre 🔥 et 📝 */
+  color: #1565c0;                /* bleu lisible */
+  text-shadow: 0 0 4px rgba(21, 101, 192, 0.5);
+}
+
+
+@keyframes sway {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(3px) rotate(3deg); }
+}
+
+
+#eventAlert {
+  display:none;
+  position:fixed;
+  top:40px; /* juste sous netAlert */
+  left:50%;
+  transform:translateX(-50%);
+  background:var(--accent);
+  color:#fff;
+  padding:8px 16px;
+  border-radius:6px;
+  font-weight:bold;
+  z-index:3000;
+  box-shadow:0 2px 8px rgba(0,0,0,0.2);
+}
+
+/* === Bouton Gaz (toujours visible, jaune) === */
+.gaz-btn {
+  background: linear-gradient(180deg, #ffd54f, #ffb300);
+  color: fcdc12;
+  border: none;
+  font-weight: bold;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-right: 6px;
+  cursor: default;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.gaz-btn:nth-of-type(2) {
+  background: linear-gradient(180deg, #bbdefb, #64b5f6); /* bleu clair */
+  color: #0d47a1;
+}
+
+/* Conteneur des boutons gaz */
+.gaz-group {
+  display: flex;
+  justify-content: center;   /* centrage horizontal */
+  align-items: center;       /* centrage vertical */
+  gap: 12px;                 /* espace entre les deux boutons */
+  width: 100%;
+}
+
+/* Style général des boutons gaz */
+.gaz-btn {
+  background: linear-gradient(180deg, #ffd54f, #ffb300);
+  color: #5d4037;
+  border: none;
+  font-weight: bold;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: default;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  opacity: 1 !important;
+  visibility: visible !important;
+  text-align: center;
+  transition: transform 0.3s ease, background 0.3s ease;
+  min-width: 110px;          /* largeur fixe pour un alignement parfait */
+}
+
+/* 3e bouton = Temps = bleu clair */
+.gaz-group .gaz-btn:nth-of-type(3) {
+  background: linear-gradient(180deg, #bbdefb, #64b5f6);
+  color: #0d47a1;
+}
+
+
+/* --- Jours chauds dans le calendrier --- */
+.hot-day {
+  background: var(--accent-muted) !important;
+  color: var(--danger) !important;
+  border-radius: 50% !important;
+  font-weight: bold !important;
+  box-shadow: 0 0 6px rgba(255, 100, 0, 0.6);
+}
+
+
+/* Cache le bloc de filtres de date tant qu’aucun dossier n’est sélectionné */
+.controls {
+  display: none;
+}
+
+
+/* === STRUCTURE DE L'ARBORESCENCE === */
+
+/* 🔥 Flamme ou icône à gauche, sans décaler le nom */
+.folder-name {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+}
+
+/* ✅ Supprime complètement les points devant les dossiers */
+#folderTree li {
+  list-style-type: none;
+}
+
+.flame-folder {
+  position: absolute;
+  left: -18px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  text-shadow:
+    0 0 3px rgba(255, 140, 0, 0.8),
+    0 0 6px rgba(255, 80, 0, 0.7);
+  animation: flicker 1s infinite alternate;
+  pointer-events: none;
+}
+
+/* 🟧 Cadre visuel du dossier actif */
+.active-folder {
+  background: var(--accent-muted);
+  border-left: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-weight: 600;
+  color: var(--accent-darker);
+  display: inline-block;
+  box-shadow: 0 0 4px rgba(0,0,0,0.1);
+}
+
+/* 📂 Hiérarchie : indentation et ligne verticale */
+#folderTree ul ul {
+  margin-left: 46px;
+  border-left: 2px solid var(--accent-muted);
+  padding-left: 14px;
+}
+
+#folderTree li {
+  position: relative;
+  margin: 3px 0;
+}
+
+#folderTree li::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 0;
+  bottom: 0;
+  border-left: 1px dashed var(--accent-muted);
+  opacity: 0.4;
+}
+
+
+.gaz-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 20px;
+}
+
+.gaz-total {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  color: #3e2723;
+}
+
+.gaz-total-m3 {
+  background: linear-gradient(180deg, #fff59d, #fbc02d);
+}
+
+.gaz-total-kwh {
+  background: linear-gradient(180deg, #ffd54f, #ffb300);
+}
+
+
+
+
+
+/* === Fond illustration SMES attachée à la sidebar === */
+#sidebar {
+  position: relative;
+  overflow: hidden;
+}
+
+#smes-footer-bg {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 35vh;
+
+  background: url("img/smes_footer.png") left bottom no-repeat;
+  background-size: cover; /* image adaptée à l’espace */
+  pointer-events: none;
+
+  mask-image: linear-gradient(
+      to top,
+      rgba(0,0,0,1) 80%,
+      rgba(0,0,0,0) 100%
+  );
+  -webkit-mask-image: linear-gradient(
+      to top,
+      rgba(0,0,0,1) 80%,
+      rgba(0,0,0,0) 100%);
+}
+
+/* --- image affichée UNIQUEMENT si thème orange --- */
+#smes-footer-bg {
+  display: none;
+}
+
+body[data-theme="orange"] #smes-footer-bg {
+  display: block;
+}
+
+
+/* === Campagnes (boutons auto 2024/2025...) === */
+.campaign-box{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:10px 12px;
+
+  /* 🔁 Bordure pleine, propre */
+  border:2px solid var(--accent);
+
+  border-radius:12px;
+
+  /* Fond plus net */
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,0.95),
+    rgba(255,245,240,0.9)
+  );
+
+  /* Légère profondeur */
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+
+.campaign-title{
+  font-size:12px;
+  font-weight:700;
+  color: var(--accent-darker);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.campaign-buttons{
+  display:flex;
+  flex-direction:column; /* ✅ un en dessous de l'autre */
+  gap:6px;
+}
+
+.campaign-btn{
+  background: linear-gradient(180deg, var(--accent-muted), #ffffff);
+  border: 2px solid var(--accent);
+  color: var(--accent-darker);
+  font-weight: 800;
+  padding: 6px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+  transition: transform .15s ease, filter .15s ease;
+}
+
+.campaign-btn:hover{
+  transform: scale(1.02);
+  filter: brightness(1.02);
+}
+
+/* ✅ Campagne sélectionnée : effet beaucoup plus visible */
+.campaign-btn.active{
+  background: linear-gradient(180deg, var(--accent), var(--accent-darker));
+  border: 3px solid var(--danger);
+  outline: 1px solid #000;      /* ✅ trait noir 1px autour */
+  outline-offset: 0;            /* collé au bouton */
+  color: var(--accent-contrast);
+
+  box-shadow:
+    0 0 0 3px rgba(255,255,255,0.6),
+    0 8px 16px rgba(0,0,0,0.25),
+    0 0 12px rgba(255,112,67,0.6);
+
+  transform: scale(1.03);
+  filter: saturate(1.2) contrast(1.1);
+}
+
+
+
+/* === Tuiles “grosses icônes” (centrées dans la page) === */
+.site-tiles{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap:14px;
+
+  /* ✅ centrage horizontal + vertical */
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%);
+
+  /* ✅ largeur propre + scroll si besoin */
+  width:min(900px, calc(100% - 20px));
+  max-height:calc(100% - 20px);
+  overflow:auto;
+
+  padding:8px;
+  margin:0;
+}
+
+.site-tiles{
+  z-index: 1200;
+  pointer-events: auto;
+}
+
+  
+
+.site-tile{
+  background: var(--panel);
+  border: 2px solid var(--accent-muted);
+  border-radius: 14px;
+  box-shadow: 0 4px 12px var(--shadow);
+  padding: 14px 12px;
+  cursor: pointer;
+  transition: transform .15s ease, filter .15s ease, border-color .15s ease;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  min-height: 120px;
+  user-select:none;
+}
+
+.site-tile:hover{
+  transform: scale(1.02);
+  filter: brightness(1.02);
+  border-color: var(--accent);
+}
+
+.site-tile .icon{
+  font-size: 44px;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.site-tile .label{
+  font-weight: 800;
+  color: var(--accent-darker);
+  text-align:center;
+  word-break: break-word;
+}
+
+
+
+  
+  
+
+</style>
+
+<!-- Calendrier enrichi -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/fr.js"></script>
+
+
+
+</head>
+<body>
+
+<div id="netAlert">⚠️ Pas de connexion internet détectée. Vérifiez votre réseau.</div>
+<div id="eventAlert">✅ Événements chargés</div>
+<div id="spinner"></div>
+
+
+<!-- Sidebar dossiers -->
+<div id="sidebar">
+  <div id="smes-footer-bg"></div>
+  <h2><span>🌽</span>Sites / Séchoirs</h2>
+  <ul id="folderTree"></ul>
+</div>
+
+
+<!-- Main -->
+<div id="main">
+  <div class="header">
+    <img src="img/logo.png" class="logo" id="mainLogo" alt="Logo"/>
+    <div id="scanIndicator">🔄 Analyse en cours...</div>
+    <div id="fileNameContainer">
+      <div id="fileName"></div>
+      <div id="lineCount"></div>
+    </div>
+  </div>
+
+<div class="controls">
+  Filtrer par date : 
+  <div class="date-field"><span id="iconStart">📅</span><input type="date" id="startDate"></div>
+  à
+  <div class="date-field"><span id="iconEnd">📅</span><input type="date" id="endDate"></div>
+
+  <!-- ✅ Boutons campagne auto (2024/2025...) -->
+  <div id="campaignBox" class="campaign-box" style="display:none;">
+    <div class="campaign-title">Vous Pouvez selectionner une période précise :</div>
+    <div id="campaignButtons" class="campaign-buttons"></div>
+  </div>
+
+  <button onclick="clearFilter()">Tout afficher</button>
+  <button id="downloadFolderBtn">Télécharger le dossier</button>
+  <button id="exportCsvBtn" style="display:none;" title="Voir les barres graphiques de consommation par jour">Graphique</button>
+  <button id="exportExcelGazBtn" style="display:none;" title="Exporter les données en Excel (kWh, m³, durée, tonnage)">Export Excel</button>
+</div>
+
+<!-- ✅ Tuiles dossiers (page principale) -->
+<div id="siteTiles" class="site-tiles" style="display:none;"></div>
+
+
+  <div id="tableWrapper">
+    <div id="tableContainer">
+      <table id="csvTable">
+<thead>
+  <tr>
+    <th onclick="sortTable(0,'date')">Date <span class="sort-arrow"></span></th>
+    <th style="width:40px; text-align:center;"></th>
+
+    <th>Télécharger / Ouvrir</th>
+    <th>Nom du fichier</th>
+    <th>Dossier</th>
+    <th onclick="sortTable(5,'number')">Taille <span class="sort-arrow"></span></th>
+  </tr>
+</thead>
+
+
+        <tbody>
+          <tr>
+            <td colspan="5" style="text-align:left;">
+              <span class="arrow-hint">⬅</span> Sélectionner un dossier...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modale image -->
+<div id="imageModal" class="modal" role="dialog" aria-modal="true">
+  <span class="close" onclick="closeModal()" aria-label="Fermer">&times;</span>
+  <!-- tabindex=-1 pour éviter que l'iframe vole le focus / bloque les flèches -->
+<iframe id="modalFrame" tabindex="-1"></iframe>
+
+<video id="modalVideo"
+       controls
+       style="display:none; width:90%; height:80vh; border:none; border-radius:10px; background:#000;">
+</video>
+
+<img id="modalImg"
+     style="display:none; max-width:90%; max-height:80vh; border-radius:10px; background:#000;"
+     alt="Aperçu" />
+
+
+<div class="modal-actions">
+  <button id="prevBtn">&larr; Précédent</button>
+  <button id="nextBtn">Suivant &rarr;</button>
+  <button id="downloadBtn">Télécharger</button>
+</div>
+
+</div>
+
+<!-- Overlay ZIP -->
+<div id="zipOverlay">
+  <div id="zipBox">
+    <span id="zipClose">&times;</span>
+    <h2>Préparation du ZIP...</h2>
+    <div id="zipFileName"></div>
+    <div id="zipProgressBar"><div id="zipProgress">0%</div></div>
+    <div id="zipCounter">0 / 0 fichiers</div>
+    <div id="zipTime">Temps restant : --</div>
+  </div>
+</div>
+
+<!-- Bouton secret + menu thèmes -->
+<div id="secretBtn" title=" "></div>
+<div id="themeMenu">
+  <span class="closeMenu" onclick="closeThemeMenu()">❌</span>
+  <h3>Choisir un thème</h3>
+  <button onclick="setTheme('orange')">Orange (défaut)</button>
+  <button onclick="setTheme('blue')">Bleu</button>
+  <button onclick="setTheme('green')">Vert</button>
+  <button onclick="setTheme('purple')">Violet</button>
+  <button onclick="setTheme('bordeaux')">Bordeaux</button>
+</div>
+
+<script>
+/* ----------- Config Drive ----------- */
+const ROOT_FOLDER_ID="18QkQPyCZxTCAaoz_qd1wAelmQbSE4ex8";
+const ROOT_MODE = "site"; // "site" ou "coop"  
+// ✅ Active/désactive les calculs de consommation gaz
+const ENABLE_GAZ_CALC = true;  // ← passe à false pour désactiver
+
+// === Dictionnaire global des notes ===
+// storedNotes["YYYYMMDD"] = [ "txt1", "txt2", ... ]
+let storedNotes = {};
+
+
+
+
+/* ----------- Config personnalisée ----------- */
+
+/* --- Descriptions dossiers (tooltip simple) --- */
+const FOLDER_DESCRIPTIONS = [
+  { key: "traça_temp", desc: "Traçabilité valeurs sondes, consignes, réglages, consommation… Courbes, plan de sondes, etc." },
+  { key: "traca_temp", desc: "Traçabilité valeurs sondes, consignes, réglages, consommation… Courbes, plan de sondes, etc." },
+  { key: "historique", desc: "Historique de fonctionnement, réglages, événements journaliers…" },
+  { key: "echantillonnage", desc: "Feuille de prises d'échantillon journalière (Humidité, réglages, etc.)." },
+  { key: "consommation gaz", desc: "Consommation gaz journalière, conversion kWh, temps de séchage, cumul tonnage…" },
+];
+
+function getFolderDescription(name){
+  const n = (name || "").toLowerCase();
+  const hit = FOLDER_DESCRIPTIONS.find(x => n.includes(x.key));
+  return hit ? hit.desc : "";
+}
+
+function applyFolderTooltip(el, folderName){
+  if (!el) return;
+
+  const desc = getFolderDescription(folderName);
+  if (desc){
+    el.title = desc; // tooltip natif
+  }
+}
+
+
+/* --- Icônes dossiers selon type --- */
+function getFolderIcon(name){
+  const n = (name || "").toLowerCase();
+
+  if (n.includes("gaz")) return "⛽";
+  if (n.includes("echantillonnage")) return "📖";
+  if (n.includes("capture")) return "🖼️";
+  if (n.includes("rapport")) return "📄";
+  if (n.includes("historique")) return "🗂️";
+  if (n.includes("traça_temp") || n.includes("traca_temp")) return "📈";
+
+  return "📒";
+}
+
+
+
+  
+const FLAME_THRESHOLD = 40.0;   // seuil déclencheur de la flamme 🔥
+
+/* ----------- État ----------- */
+let previewFiles = [], currentPreviewIndex = 0;
+let historiqueDurations = {};
+
+let filterStartDate="", filterEndDate="";
+  let activeScans = 0;
+
+function startScan() {
+  activeScans++;
+  document.getElementById("scanIndicator").style.display = "block";
+}
+
+function endScan() {
+  activeScans--;
+  if (activeScans <= 0) {
+    activeScans = 0;
+    document.getElementById("scanIndicator").style.display = "none";
+  }
+}
+
+let themeMenuTimer;
+let cancelScan = false;
+
+let isUserNavigating = false;   // 🔒 verrou navigation utilisateur
+
+
+function isDriveFolderOrShortcutFolder(f){
+  return (
+    f?.mimeType === "application/vnd.google-apps.folder" ||
+    (f?.mimeType === "application/vnd.google-apps.shortcut" &&
+     f?.shortcutDetails?.targetMimeType === "application/vnd.google-apps.folder")
+  );
+}
+
+function getDriveFolderId(f){
+  if (f?.mimeType === "application/vnd.google-apps.shortcut" && f?.shortcutDetails?.targetId) {
+    return f.shortcutDetails.targetId; // ✅ ID du dossier cible
+  }
+  return f?.id; // ✅ dossier normal
+}
+
+function getDriveFileId(f){
+  if (f?.mimeType === "application/vnd.google-apps.shortcut" && f?.shortcutDetails?.targetId) {
+    return f.shortcutDetails.targetId; // ✅ fichier cible
+  }
+  return f?.id; // ✅ fichier normal
+}
+
+  
+
+/* ===========================
+   === Campagnes (2024/2025...)
+   =========================== */
+let activeCampaignKey = ""; // ex: "2025"
+let campaignBySite = {};    // cache: { siteId: { "2025": {start:"YYYY-MM-DD", end:"YYYY-MM-DD"} } }
+
+function parseCampaignDateToISO(s){
+  // accepte "09/09/2025" (dd/mm/yyyy)
+  const txt = (s || "").trim();
+  const m = txt.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if(!m) return "";
+  const dd = m[1], mm = m[2], yyyy = m[3];
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+async function loadCampaignFilesForSite(siteId){
+  if (!siteId) return {};
+  if (campaignBySite[siteId]) return campaignBySite[siteId];
+
+  const files = await fetchFolderContents(siteId);
+
+  // accepte tout fichier qui CONTIENT une année et finit par .json/.csv
+  // ex: "2024.json", "🌽2025.json", "2024 Roulin 1🌻.json"
+  const campFiles = files.filter(f =>
+    /\d{4}.*\.(json|csv)$/i.test(f.name)
+  );
+
+
+  if (!campFiles.length){
+    campaignBySite[siteId] = {};
+    return {};
+  }
+
+  const out = {}; // { "2025": {start, end} }
+
+  await Promise.all(campFiles.map(async (f) => {
+    const key = (f.name || "").replace(/\.(json|csv)$/i, "").trim();
+
+    // année = sert au tri (on prend la 1ère année trouvée dans le nom)
+    const mYear = (f.name || "").match(/(\d{4})/);
+    const year = mYear ? mYear[1] : "0000";
+
+
+    try{
+const realId = getDriveFileId(f);
+const res = await fetch(
+  `https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(f.name)}&site=Smes_Acces`
+);
+
+      if(!res.ok) return;
+
+      const text = await res.text();
+
+      // on lit 2 lignes (peu importe json/csv: tu as dit "2 lignes")
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if(lines.length < 2) return;
+
+      const startISO = parseCampaignDateToISO(lines[0]);
+      const endISO   = parseCampaignDateToISO(lines[1]);
+      if(!startISO || !endISO) return;
+
+      out[key] = { start: startISO, end: endISO, fileName: f.name };
+
+    } catch(e){
+      console.warn("[CAMPAGNE] Erreur lecture", f.name, e);
+    }
+  }));
+
+  campaignBySite[siteId] = out;
+  return out;
+}
+
+function renderCampaignButtons(campaigns){
+  const box = document.getElementById("campaignBox");
+  const wrap = document.getElementById("campaignButtons");
+  if(!box || !wrap) return;
+
+  wrap.innerHTML = "";
+    const keys = Object.keys(campaigns || {}).sort((a,b)=>{
+    const ya = campaigns[a]?.year || "0000";
+    const yb = campaigns[b]?.year || "0000";
+    if (ya !== yb) return yb.localeCompare(ya); // année desc
+    return a.localeCompare(b, 'fr', { sensitivity:'base' }); // puis nom
+  });
+
+
+  if(!keys.length){
+    box.style.display = "none";
+    activeCampaignKey = "";
+    return;
+  }
+
+  box.style.display = "flex";
+
+  keys.forEach(key => {
+    const c = campaigns[key];
+    const btn = document.createElement("button");
+    btn.className = "campaign-btn" + (activeCampaignKey === key ? " active" : "");
+    // Nom brut depuis le fichier (sans extension)
+let label = (c.fileName || key)
+  .replace(/\.(json|csv)$/i, "")
+  .trim();
+
+btn.textContent =
+  `Campagne ${label} (${c.start.split("-").reverse().join("/")} → ${c.end.split("-").reverse().join("/")})`;
+
+
+    btn.onclick = async () => {
+      const isSame = (activeCampaignKey === key);
+      activeCampaignKey = isSame ? "" : key;
+
+      document.querySelectorAll(".campaign-btn").forEach(b => b.classList.remove("active"));
+      if(!isSame) btn.classList.add("active");
+
+      if (isSame) return; // si on re-clique la même, on juste désactive visuellement
+
+      // ⚠️ ton flatpickr onChange déclenche refreshCurrentFolder.
+      // On désactive temporairement pour éviter 2 refreshs.
+      suppressAutoFilter = true;
+      try{
+        fpStart?.setDate(c.start, true);
+        fpEnd?.setDate(c.end, true);
+      } finally {
+        suppressAutoFilter = false;
+      }
+
+      // ✅ on pousse les filtres + refresh
+      filterStartDate = c.start;
+      filterEndDate   = c.end;
+
+      await refreshCurrentFolder();
+    };
+
+    wrap.appendChild(btn);
+  });
+}
+
+async function refreshCampaignUIForSite(siteId){
+  const campaigns = await loadCampaignFilesForSite(siteId);
+  renderCampaignButtons(campaigns);
+}
+
+
+
+  
+async function getTonnageForDate(siteId, dateStr) {
+
+  try {
+    const folders = await fetchFolderContents(siteId);
+
+
+
+
+const tracatemp = folders.find(f =>
+  isDriveFolderOrShortcutFolder(f) &&
+  (f.name.toLowerCase().includes("traça_temp") || f.name.toLowerCase().includes("traca_temp"))
+);
+
+
+        if (!tracatemp) {
+            console.warn("❌ Dossier Traça_Temp introuvable !");
+            return 0;
+        }
+
+        console.log("✔ Dossier Traça_Temp trouvé :", tracatemp.name, tracatemp.id);
+
+        const files = await fetchFolderContents(getDriveFolderId(tracatemp));
+
+if (!files || files.length === 0) {
+  console.warn("⚠️ Traça_Temp vide → tonnage ignoré");
+  return 0;
+}
+
+
+
+      
+        const csvName = `SA00094_${dateStr.replace(/-/g, "")}.csv`;
+
+        console.log("Recherche du fichier :", csvName);
+
+        const file = files.find(f => f.name.toLowerCase() === csvName.toLowerCase());
+
+        if (!file) {
+            console.warn("❌ Fichier non trouvé dans Traça_Temp :", csvName);
+            return 0;
+        }
+
+        console.log("✔ Fichier trouvé :", file.name, file.id);
+
+        // Téléchargement du CSV
+        const realId = getDriveFileId(file);
+const url = `https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(file.name)}&site=Smes_Acces`;
+
+
+        console.log("Téléchargement depuis :", url);
+
+        const resp = await fetch(url);
+
+        if (!resp.ok) {
+            console.error("❌ Erreur téléchargement CSV :", resp.status);
+            return 0;
+        }
+
+        const text = await resp.text();
+
+        console.log("✔ CSV téléchargé, longueur :", text.length);
+
+        const lines = text.split(/\r?\n/).filter(l => l.trim() !== "");
+
+
+        console.log("Nombre de lignes :", lines.length);
+
+        // === Nouveau parseur fiable ===
+        function parseCSV(line) {
+            const result = [];
+            let current = "";
+            let insideQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+                const c = line[i];
+
+                if (c === '"' && line[i + 1] === '"') {
+                    current += '"';
+                    i++;
+                }
+                else if (c === '"') {
+                    insideQuotes = !insideQuotes;
+                }
+                else if (c === "," && !insideQuotes) {
+                    result.push(current);
+                    current = "";
+                }
+                else {
+                    current += c;
+                }
+            }
+            result.push(current);
+            return result;
+        }
+
+        const header = parseCSV(lines[0]);
+
+        console.log("Header :", header);
+
+const idx = header.findIndex(h =>
+  h.toLowerCase().includes("cumul") &&
+  h.toLowerCase().includes("tonne")
+);
+
+
+        console.log("Index 'Cumul (tonnes)' :", idx);
+
+        if (idx === -1) {
+            console.warn("❌ Colonne 'Cumul (tonnes)' introuvable !");
+            return 0;
+        }
+
+if (lines.length < 2) return 0;
+
+const firstLine = parseCSV(lines[1]);
+const lastLine  = parseCSV(lines[lines.length - 1]);
+
+
+        console.log("Première ligne tonnage brute :", firstLine[idx]);
+        console.log("Dernière ligne tonnage brute :", lastLine[idx]);
+
+        const first = parseFloat(firstLine[idx].replace(",", "."));
+        const last  = parseFloat(lastLine[idx].replace(",", "."));
+
+        console.log("Parsed first =", first, "last =", last);
+
+        if (!isFinite(first) || !isFinite(last)) {
+            console.warn("❌ Valeurs tonnage invalides !");
+            return 0;
+        }
+
+if (last < first) {
+  console.warn("⚠️ Cumul réinitialisé, tonnage ignoré");
+  return 0;
+}
+
+const diff = last - first;
+return diff;
+
+
+    } catch (e) {
+        console.error("💥 Exception tonnage :", e);
+        return 0;
+    }
+}
+
+
+
+
+/* ----------- Utilitaires UI ----------- */
+const spinner=document.getElementById('spinner');
+function showSpinner(){spinner.style.display='block';}
+function hideSpinner(){spinner.style.display='none';}
+
+function getSiteRootLi(li){
+  let cur = li;
+  while (cur && cur.parentElement && cur.parentElement.closest("li")) {
+    cur = cur.parentElement.closest("li");
+  }
+  return cur; // dossier racine du site
+}
+
+
+
+function updateNetworkStatus(){
+  document.getElementById("netAlert").style.display = navigator.onLine ? "none" : "block";
+}
+window.addEventListener("online",updateNetworkStatus);
+window.addEventListener("offline",updateNetworkStatus);
+
+function formatSize(bytes){
+  if(!bytes) return "?";
+  const units=["o","Ko","Mo","Go"]; let i=0; let v=Number(bytes);
+  while(v>=1024 && i<units.length-1){ v/=1024; i++; }
+  return (i===0?Math.round(v):v.toFixed(1))+" "+units[i];
+}
+
+function showEventAlert(msg="✅ Événements chargés") {
+  const alertBox = document.getElementById("eventAlert");
+  alertBox.textContent = msg;
+  alertBox.style.display = "block";
+  setTimeout(()=>{ alertBox.style.display="none"; },2000);
+}
+
+
+/* ----------- Drive API ----------- */
+async function fetchFolderContents(folderId){
+  if(!navigator.onLine){updateNetworkStatus();return [];}
+  showSpinner();
+  try{
+    const res = await fetch(`https://smes21540.netlify.app/.netlify/functions/drive?list=true&id=${folderId}&site=Smes_Acces`);
+
+    // 🚫 Blocage abonnement
+    if (res.status === 403) {
+      alert("⛔ Accès suspendu : merci de régulariser votre abonnement.");
+      hideSpinner();
+      return [];
+    }
+
+    // 🔎 Autre erreur HTTP
+    if (!res.ok) {
+      console.error("Erreur proxy Drive:", res.status, res.statusText);
+      alert("Erreur réseau ou proxy. Vérifie ta connexion ou ton accès.");
+      hideSpinner();
+      return [];
+    }
+
+    // ✅ Lecture JSON si tout va bien
+    const data = await res.json();
+    if (data.error) {
+      console.error("Erreur Google Drive API:", data.error);
+      alert("Erreur Drive (proxy). Ouvre la console pour le détail.");
+      hideSpinner();
+      return [];
+    }
+
+    return data.files || [];
+
+  } catch(e){
+    console.error("Erreur Drive:", e);
+    alert("Erreur interne ou blocage d’accès (proxy).");
+    return [];
+  } finally{
+    hideSpinner();
+  }
+}
+
+// Fonction utilitaire pour récupérer les sous-dossiers sans modifier l'affichage
+async function fetchChildren(folderId){
+  const files = await fetchFolderContents(folderId);
+  return files.filter(isDriveFolderOrShortcutFolder);
+}
+
+
+
+async function loadRootFolders(){
+
+  const rootUL = document.getElementById('folderTree');
+  rootUL.innerHTML = '';
+
+  // 🔵 MODE SITE → comportement EXACTEMENT comme avant
+  if (ROOT_MODE === "site") {
+
+    const files = await fetchFolderContents(ROOT_FOLDER_ID);
+
+    document.querySelector(".controls").style.display = "none";
+    const cb = document.getElementById("campaignBox");
+    if (cb) cb.style.display = "none";
+    activeCampaignKey = "";
+
+    const rootFolders = files
+      .filter(isDriveFolderOrShortcutFolder)
+      .sort((a,b) => a.name.localeCompare(b.name,'fr',{sensitivity:'base'}));
+
+    renderRootTiles(rootFolders);
+
+    rootFolders.forEach(f => {
+      const li = document.createElement('li');
+      li.dataset.id = getDriveFolderId(f);
+
+      const toggle = document.createElement('span');
+      toggle.className = 'folder-toggle';
+      toggle.onclick = (e) => toggleFolder(li, e);
+
+      const span = document.createElement('span');
+      span.className = 'folder-name';
+      span.innerHTML = `${getFolderIcon(f.name)} ${f.name}`;
+      applyFolderTooltip(span, f.name);
+
+      span.onclick = async (e) => {
+        e?.stopPropagation?.();
+        document.querySelector(".controls").style.display = "flex";
+        await openSiteAndShowTiles(li.dataset.id, f.name);
+      };
+
+      li.appendChild(toggle);
+      li.appendChild(span);
+      rootUL.appendChild(li);
+    });
+
+    return;
+  }
+
+  // 🟠 MODE COOP → un cran au-dessus
+
+  const coopFolders = await fetchFolderContents(ROOT_FOLDER_ID);
+
+  const sites = coopFolders
+    .filter(isDriveFolderOrShortcutFolder)
+    .sort((a,b)=>a.name.localeCompare(b.name,'fr',{sensitivity:'base'}));
+
+  // Pas de tuiles racine en coop
+  hideSiteTiles();
+
+  sites.forEach(site => {
+
+    const li = document.createElement('li');
+    li.dataset.id = getDriveFolderId(site);
+
+    const toggle = document.createElement('span');
+    toggle.className = 'folder-toggle';
+    toggle.onclick = (e)=>toggleFolder(li,e);
+
+    const span = document.createElement('span');
+    span.className = 'folder-name';
+    span.innerHTML = `📁 ${site.name}`;
+
+    span.onclick = async (e)=>{
+      e?.stopPropagation?.();
+      document.querySelector(".controls").style.display = "flex";
+      await openSiteAndShowTiles(li.dataset.id, site.name);
+    };
+
+    li.appendChild(toggle);
+    li.appendChild(span);
+    rootUL.appendChild(li);
+  });
+
+}
+
+
+
+  // 🔥 Vérifier automatiquement deux crans plus bas sans ouvrir visuellement
+  setTimeout(async () => {
+    const siteFolders = Array.from(document.querySelectorAll("#folderTree > li"));
+
+    const limit = 3;
+    let idx = 0;
+
+    async function worker(){
+      while(idx < siteFolders.length){
+        const siteLi = siteFolders[idx++];
+        const subFolders = await fetchChildren(siteLi.dataset.id);
+
+        for (const sub of subFolders) {
+          if ((sub.name || "").includes("Temp")) {
+            await checkTraçaTempToday(siteLi, getDriveFolderId(sub));
+          }
+        }
+      }
+    }
+
+    await Promise.all(Array.from({ length: limit }, worker));
+  }, 1000);
+
+
+
+
+async function expandFolder(li){
+  if (!li) return;
+
+  // Si pas encore chargé → on charge
+  if (li.dataset.loaded !== "true") {
+    await toggleFolder(li); 
+    // toggleFolder va créer <ul> et laisser affiché
+    return;
+  }
+
+  // Si déjà chargé → on force ouvert (NE PAS REPLIER)
+  const ul = li.querySelector("ul");
+  if (ul) ul.style.display = "block";
+}
+
+
+
+
+  
+async function toggleFolder(li, event){
+
+  // 🛡️ Anti double-clic / anti double chargement concurrent
+  if (li.dataset.loading === "true") return;
+  li.dataset.loading = "true";
+
+  try {
+    const toggle = li.querySelector('.folder-toggle');
+
+if (li.dataset.loaded === 'true') {
+  const ul = li.querySelector('ul');
+  if (!ul) return;
+
+  // ✅ APPEL PROGRAMMATIQUE → on ASSURE ouvert
+  if (!event) {
+    ul.style.display = 'block';
+    return;
+  }
+
+  // ✅ CLIC UTILISATEUR SUR LA FLÈCHE → toggle
+  ul.style.display = (ul.style.display === 'none') ? 'block' : 'none';
+  return;
+}
+
+
+    toggle.textContent = '…';
+
+    const files = await fetchFolderContents(li.dataset.id);
+
+
+
+
+    
+    const ul = document.createElement('ul');
+
+const folders = files
+  .filter(isDriveFolderOrShortcutFolder)
+  .sort((a,b) => a.name.localeCompare(b.name, 'fr', { sensitivity:'base' }));
+
+for (const f of folders) {
+  const childLi = document.createElement('li');
+  childLi.dataset.id = getDriveFolderId(f);
+
+      const childToggle = document.createElement('span');
+      childToggle.className = 'folder-toggle';
+      childToggle.textContent = '';
+
+      // ✅ IMPORTANT: passer l’event
+      childToggle.onclick = (e) => toggleFolder(childLi, e);
+
+      const span = document.createElement('span');
+      span.className = 'folder-name';
+
+      const icon = getFolderIcon(f.name);
+      span.innerHTML = `${icon} ${f.name}`;
+      applyFolderTooltip(span, f.name);
+
+      span.onclick = (e) => loadFolderFilesOnClick(childLi, e);
+
+      childLi.appendChild(childToggle);
+      childLi.appendChild(span);
+      ul.appendChild(childLi);
+
+      // ✅ Vérif Temp (flamme 🔥)
+      if (f.name.includes("Temp")) {
+  checkTraçaTempToday(li, getDriveFolderId(f));
+}
+
+    }
+
+    li.appendChild(ul);
+    li.dataset.loaded = 'true';
+    toggle.textContent = '';
+
+  } finally {
+    li.dataset.loading = "false";
+  }
+
+}
+
+
+
+
+
+
+
+  
+async function loadFolderFilesOnClick(li, event){
+let filtered = [];
+  isUserNavigating = true;   // 🔒 début navigation utilisateur
+startScan();   // 🔄
+  try {
+
+
+
+  // ✅ 1) Si li est absent (appel auto / refresh / filtre), on tente de le retrouver
+  if (!li) {
+    const lastId = localStorage.getItem("lastFolderId");
+    if (lastId) {
+      li = document.querySelector(`#folderTree li[data-id="${lastId}"]`);
+    }
+  }
+
+  // ✅ 2) Si toujours rien, on sort proprement (plus de ReferenceError)
+  if (!li) {
+    console.warn("[loadFolderFilesOnClick] appelé sans li valide");
+    return;
+  }
+
+  // ✅ 3) Sécurité bonus : si li n’a pas dataset.id, on tente de le reconstruire
+  if (!li.dataset || !li.dataset.id) {
+    const lastId = localStorage.getItem("lastFolderId");
+    if (lastId) {
+      const fallback = document.querySelector(`#folderTree li[data-id="${lastId}"]`);
+      if (fallback) li = fallback;
+    }
+  }
+
+  // reset des notes
+  storedNotes = {};
+  if (typeof jsonDates !== "undefined") jsonDates.clear?.();
+  localStorage.removeItem("csvNotes");
+
+  await toggleFolder(li);
+
+  // 🔄 Réinitialiser la sélection visuelle
+  document.querySelectorAll('#folderTree li span.folder-name')
+    .forEach(s => s.classList.remove('active-folder'));
+
+  // ✅ Surligne le dossier cliqué
+  const nameSpan = li.querySelector('span.folder-name');
+  if (nameSpan) nameSpan.classList.add('active-folder');
+
+  // ✅ Surligne aussi tous les parents (chemin hiérarchique)
+  let parentLi = li.parentElement.closest('li');
+  while (parentLi) {
+    const parentSpan = parentLi.querySelector('span.folder-name');
+    if (parentSpan) parentSpan.classList.add('active-folder');
+    parentLi = parentLi.parentElement.closest('li');
+  }
+
+  // ✅ Ne set le lastFolderId que si on peut
+  if (li.dataset?.id) {
+    localStorage.setItem('lastFolderId', li.dataset.id);
+  }
+
+// 📂 Sauvegarde du chemin complet (ex: Voreppe/Traça_Temp)
+function buildFullFolderPath(li) {
+  const parts = [];
+  let current = li;
+  while (current) {
+    const nameSpan = current.querySelector(".folder-name");
+    if (nameSpan) parts.unshift(nameSpan.textContent.trim());
+    current = current.parentElement.closest("li");
+  }
+  return parts.join("/");
+}
+
+const fullPath = buildFullFolderPath(li);
+localStorage.setItem("lastFolderPath", fullPath);
+console.log("[Folder] Chemin complet enregistré :", fullPath);
+
+
+  const folderName = nameSpan ? nameSpan.textContent.toLowerCase() : "";
+
+// ⚡ Gestion spéciale Z3 (cache des fichiers Z3 depuis "Historique")
+const folderNameLower = (nameSpan ? nameSpan.textContent : "").toLowerCase();
+
+if (folderNameLower.includes("traça_temp") || folderNameLower.includes("traca_temp")) {
+
+  const siteLi = li.parentElement.closest("li");
+
+  if (siteLi && siteLi.dataset.id) {
+    try {
+      const siblings = await fetchFolderContents(siteLi.dataset.id);
+
+      const hist = siblings.find(s =>
+        isDriveFolderOrShortcutFolder(s) &&
+        (s.name || "").toLowerCase().includes("historique")
+      );
+
+      if (hist) {
+        const histId = getDriveFolderId(hist);
+        const histFiles = await fetchFolderContents(histId);
+
+const z3Files = histFiles.filter(ff =>
+  /^z3/i.test(ff.name) &&
+  /\.csv$/i.test(ff.name)
+);
+
+
+        localStorage.setItem("csvZ3Files", JSON.stringify(z3Files));
+        console.log("[Z3] Préchargés depuis Historique voisin:", z3Files.length);
+      } else {
+        localStorage.removeItem("csvZ3Files");
+      }
+
+    } catch (e) {
+      console.error("[Z3] Erreur préchargement Historique:", e);
+      localStorage.removeItem("csvZ3Files");
+    }
+  }
+
+} else if (folderNameLower.includes("historique")) {
+
+  try {
+    const histFiles = await fetchFolderContents(li.dataset.id);
+
+    const z3Files = histFiles.filter(ff =>
+      ff.name.toUpperCase().startsWith("Z3") &&
+      ff.name.toLowerCase().endsWith(".CSV")
+    );
+
+    localStorage.setItem("csvZ3Files", JSON.stringify(z3Files));
+    console.log("[Z3] Préchargés directement (Historique):", z3Files.length);
+
+  } catch (e) {
+    console.error("[Z3] Erreur lecture Historique:", e);
+    localStorage.removeItem("csvZ3Files");
+  }
+
+} else {
+  localStorage.removeItem("csvZ3Files");
+}
+
+
+
+
+const files = await fetchFolderContents(li.dataset.id);
+
+// ✅ fichiers visibles (portée globale dans la fonction)
+filtered = (files || []).filter(f =>
+  /\.(csv|jpg|jpeg|png|gif|webp|json|pdf|mp4|webm|mov|m4v|avi|ppsx|pptx)$/i.test(f.name)
+);
+
+
+// ✅ sous-dossiers
+const subFolders = (files || []).filter(isDriveFolderOrShortcutFolder);
+
+// fichiers réellement affichables (hors json techniques)
+const displayableFiles = filtered.filter(f =>
+  !f.name.toLowerCase().endsWith(".json")
+);
+
+
+console.log("DEBUG displayableFiles:", displayableFiles.length);
+console.log("DEBUG subFolders:", subFolders.length);
+
+console.log("FILES RAW:", files.length);
+console.log("FILTERED:", filtered.length);
+console.log("DISPLAYABLE:", displayableFiles.length);
+console.log("SUBFOLDERS:", subFolders.length);
+    
+
+
+const hasCsv = (files || []).some(f =>
+  f.name && f.name.toLowerCase().endsWith(".csv")
+);
+
+// 🚫 Mode tuiles UNIQUEMENT si aucun fichier affichable
+if (!hasCsv && subFolders.length > 0) {
+  const folderName = li.querySelector(".folder-name")?.textContent?.trim() || "";
+  await renderSiteSubfolderTiles(li.dataset.id, folderName);
+  return;
+}
+
+// ✅ Sinon → on affiche les fichiers
+hideSiteTiles();
+showTable();
+
+await displayFiles(files, folderName);
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+// 🧭 Détermination du site courant (toujours la racine du site)
+const siteRootLi = getSiteRootLi(li);
+const siteId = siteRootLi?.dataset.id || null;
+
+
+if (siteId && siteId !== currentSiteId) {
+
+  // ✅ RESET filtres date dès changement de site
+  resetDateFilterUIAndState();
+  
+  clearSiteHotDays();
+  currentSiteId = siteId;
+  console.log(`[SITE] Changement de site → ${siteRootLi?.querySelector(".folder-name")?.textContent}`);
+
+
+  // ✅ Campagnes (2024/2025...) depuis le dossier parent du site
+  await refreshCampaignUIForSite(siteId);
+  
+// 🔥 Lancer le scan en arrière-plan sans bloquer l'affichage
+scanSiteHotDays(siteId).then(map => {
+  hotDaysMap = map;
+  console.log(`[CACHE] 🔥 ${Object.keys(hotDaysMap).length} jours chauds détectés et chargés pour ${siteRootLi?.querySelector(".folder-name")?.textContent}`);
+
+
+// 🪄 Rafraîchir seulement les flammes dans le tableau actuel sans supprimer les notes 📝
+document.querySelectorAll('#csvTable tbody tr').forEach(tr => {
+  const nameCell = tr.cells[3];
+  const flameCell = tr.cells[1];
+  if (!nameCell || !flameCell) return;
+
+  const fname = nameCell.textContent.trim();
+  const m = fname.match(/(\d{8})\.csv$/i);
+
+  // 🔥 flamme DAY
+  if (m && hotDaysMap[m[1]] && !flameCell.innerHTML.includes("🔥")) {
+    flameCell.insertAdjacentHTML(
+      "afterbegin",
+      `<span class="flame" title="Brûleur actif ce jour-là">🔥</span>`
+    );
+  }
+
+  // 📝 notes depuis JSON
+  if (m && storedNotes[m[1]] && !flameCell.innerHTML.includes("📝")) {
+    flameCell.insertAdjacentHTML(
+      "beforeend",
+      ` <span class="note" title="${storedNotes[m[1]].join("\n")}">📝</span>`
+      );
+    }
+  });
+});
+
+} else if (siteId && Object.keys(hotDaysMap).length === 0) {
+  hotDaysMap = loadSiteHotDays(siteId);
+  if (Object.keys(hotDaysMap).length === 0) {
+    console.log(`[CACHE] Aucun cache trouvé pour ${li?.querySelector(".folder-name")?.textContent}, relance du scan...`);
+
+scanSiteHotDays(siteId).then(map => {
+  hotDaysMap = map;
+  console.log(`[CACHE] 🔥 ${Object.keys(hotDaysMap).length} jours chauds détectés et chargés pour ${siteRootLi?.querySelector(".folder-name")?.textContent}`);
+});
+
+  } else {
+    console.log(`[CACHE] ${Object.keys(hotDaysMap).length} jours chauds chargés depuis cache`);
+  }
+}
+
+previewFiles = filtered
+  .filter(f => /\.(jpg|jpeg|png|gif|webp|pdf|mp4|webm|mov|m4v)$/i.test(f.name))
+  .map(f => ({ ...f, _realId: getDriveFileId(f) }));
+
+
+
+
+
+
+// 🪄 Applique immédiatement les flammes du cache si déjà chargé pour ce site
+if (Object.keys(hotDaysMap).length > 0) {
+  document.querySelectorAll('#csvTable tbody tr').forEach(tr => {
+    const nameCell = tr.cells[3]; // colonne Nom du fichier
+    const flameCell = tr.cells[1]; // colonne flamme
+    if (!nameCell || !flameCell) return;
+
+    const m = nameCell.textContent.match(/(\d{8})\.csv$/i);
+    if (m && hotDaysMap[m[1]]) {
+      flameCell.innerHTML = `<span class="flame" title="Brûleur actif ce jour-là">🔥</span>`;
+    }
+  });
+}
+
+  } finally {
+    isUserNavigating = false;
+    endScan();   // 🔄 fin chargement dossier
+  }
+
+
+    
+}
+
+async function displayFiles(files, folderName){
+
+  hideSiteTiles();
+
+
+  const tbody=document.querySelector('#csvTable tbody');
+
+  // Reset total historique
+  historiqueDurations = [];
+  
+  const downloadBtn=document.getElementById('downloadFolderBtn');
+  tbody.innerHTML='';
+
+
+  document.querySelector(".controls").style.display = "flex";
+
+  const gazTasks = []; // ✅ ICI (une seule fois)
+
+
+const siteIdForDisplay = currentSiteId;
+
+
+  
+  // ✅ Afficher les filtres uniquement dans un dossier final (contenant des fichiers)
+document.querySelector(".controls").style.display = "flex";
+
+
+  if(files.length===0){
+    tbody.innerHTML='<tr><td colspan="5" style="text-align:center;">Aucun fichier</td></tr>';
+    downloadBtn.style.display="none";
+    return;
+  }
+
+
+  downloadBtn.style.display="inline-block";
+
+downloadBtn.style.display="inline-block";
+
+const exportBtn = document.getElementById("exportCsvBtn");
+const excelBtn  = document.getElementById("exportExcelGazBtn");
+
+
+
+// === Gestion affichage boutons et pastilles GAZ ===
+if (folderName.toLowerCase().includes("consommation gaz")) {
+  exportBtn.style.display = "inline-block";
+  excelBtn.style.display  = "inline-block";
+
+  // --- Création des pastilles totales GAZ si absentes ---
+  const excelBtnGaz = document.getElementById("exportExcelGazBtn");
+  const existingSummary = document.querySelector(".gaz-summary");
+  if (excelBtnGaz && !existingSummary) {
+    const summaryDiv = document.createElement("div");
+    summaryDiv.className = "gaz-summary";
+    summaryDiv.innerHTML = `
+      <span class="gaz-total gaz-total-m3" title="Total m³ calculé">m³ total: --</span>
+      <span class="gaz-total gaz-total-kwh" title="Total kWh calculé">kWh total: --</span>
+    `;
+    excelBtnGaz.insertAdjacentElement("afterend", summaryDiv);
+  }
+} else {
+  // --- Masquage des boutons GAZ ---
+  exportBtn.style.display = "none";
+  excelBtn.style.display  = "none";
+
+  // --- Suppression des pastilles totales GAZ ---
+  const existingSummary = document.querySelector(".gaz-summary");
+  if (existingSummary) existingSummary.remove();
+}
+
+
+
+
+// 🔍 Prépare la liste des dates ayant un JSON "actif"
+const jsonDates = new Set();
+
+await Promise.all(
+  files.filter(f => f.name.toLowerCase().endsWith(".json"))
+    .map(async (file) => {
+      const m = file.name.match(/(\d{8})/);
+      if (!m) return;
+      const key = m[1];
+
+      try {
+        const realId = getDriveFileId(file);
+const res = await fetch(
+  `https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(file.name)}&site=Smes_Acces`
+);
+
+        if (!res.ok) return;
+
+        const text = await res.text();
+        const data = JSON.parse(text);
+
+        // JSON attendu sous forme d’ARRAY
+        // On extrait toutes les notes actives
+        const notesForDate = data
+          .filter(n => n.status?.toLowerCase() === "active")
+          .map(n => n.note?.trim())
+          .filter(Boolean);
+
+        if (notesForDate.length > 0) {
+          storedNotes[key] = notesForDate;
+          jsonDates.add(key);
+        }
+
+      } catch (err) {
+        console.warn("⚠️ JSON mal formé :", file.name);
+      }
+    })
+);
+
+
+
+// ➕ Helpers pour ajouter sans écraser
+function addFlame(cell){
+  if (!cell.innerHTML.includes("🔥")) {
+    cell.innerHTML += (cell.innerHTML ? " " : "") + `<span class="flame" title="Brûleur actif ce jour-là">🔥</span>`;
+  }
+}
+function addNote(cell){
+  if (!cell.innerHTML.includes("📝")) {
+    cell.innerHTML += (cell.innerHTML ? " " : "") + `<span class="note" title="Note associée">📝</span>`;
+  }
+}
+
+
+
+
+for (const f of files) {
+
+  // ✅ ID réel (si shortcut → targetId, sinon id normal)
+  const realId = getDriveFileId(f);
+
+  // ❌ On n'affiche pas les .json : ils servent juste à poser 📝
+  if (f.name.toLowerCase().endsWith(".json")) continue;
+
+
+    // Date
+    let date='';
+
+    const m=f.name.match(/(\d{8})\.csv$/i);
+    if(m){ date=`${m[1].slice(0,4)}-${m[1].slice(4,6)}-${m[1].slice(6,8)}`; }
+    else if(/\.(jpg|jpeg)$/i.test(f.name)){
+      if(f.modifiedTime) date=f.modifiedTime.slice(0,10);
+      else if(f.createdTime) date=f.createdTime.slice(0,10);
+    }
+
+    if((filterStartDate && date<filterStartDate) || (filterEndDate && date>filterEndDate)) continue;
+
+const tr=document.createElement('tr');
+
+    const tdFlame = document.createElement('td');
+tdFlame.style.textAlign = "center";
+tdFlame.style.width = "26px";
+tdFlame.textContent = "";
+
+
+
+// 🔥 Application flamme si le fichier correspond à un jour chaud
+const match = f.name.match(/(\d{8})\.csv$/i);
+if (match) {
+  const dateKey = match[1];
+
+  if (hotDaysMap[dateKey]) {
+    addFlame(tdFlame);
+  } else {
+    setTimeout(() => {
+      if (hotDaysMap[dateKey]) addFlame(tdFlame);
+    }, 1000);
+  }
+}
+
+// 📝 Ajoute une icône si un JSON de la même date est présent (persiste même après réaffichage)
+if (match && storedNotes[match[1]]) {
+  const txt = storedNotes[match[1]].join("\n");
+  tdFlame.innerHTML += ` <span class="note" title="${txt}">📝</span>`;
+}
+
+
+
+
+
+
+// Bloc DATE avec affichage du jour
+const tdDate=document.createElement('td');
+if (date) {
+  const d = new Date(date);
+  const jours = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
+  const jourNom = jours[d.getDay()];
+  tdDate.textContent = `${date} ${jourNom}`;
+
+  // Week-end → rouge + gras
+  if (d.getDay() === 0 || d.getDay() === 6) {
+    tdDate.style.color = "var(--danger)";
+    tdDate.style.fontWeight = "bold";
+  }
+} else {
+  tdDate.textContent = '';
+}
+
+const tdName = document.createElement('td');
+tdName.textContent = f.name;
+
+// === FLAMME FILE (avec cancelScan) ===
+if (f.name.toLowerCase().endsWith(".csv") &&
+    (folderName.toLowerCase().includes("traça_temp") || folderName.toLowerCase().includes("traca_temp"))) {
+
+  // Message provisoire
+  tdName.innerHTML = `${f.name}&nbsp;&nbsp;&nbsp;<span style="color:gray;font-size:11px;">(scan en cours...)</span>`;
+
+  (async () => {
+    try {
+      if (cancelScan) { tdName.innerHTML = f.name; return; } // 🛑 stop si demandé
+
+      const url = `https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(f.name)}&site=Smes_Acces`;
+
+
+      const res = await fetch(url);
+      if (!res.ok) { tdName.innerHTML = f.name; return; }
+
+      const text = await res.text();
+      if (cancelScan) { tdName.innerHTML = f.name; return; } // 🛑 stop si demandé
+
+      const lines = text.split(/\r?\n/).filter(l => l.trim() !== "");
+      if (lines.length < 2) { tdName.innerHTML = f.name; return; }
+
+      const headers = lines[0].split(",").map(h => h.replace(/"/g,"").trim().toLowerCase());
+      let idxInf = headers.map((h,i)=>({h,i})).filter(o=>o.h.includes("sonde ac inf"))[1]?.i;
+      let idxSup = headers.map((h,i)=>({h,i})).filter(o=>o.h.includes("sonde ac sup"))[1]?.i;
+
+      if (idxInf === undefined && idxSup === undefined) { tdName.innerHTML = f.name; return; }
+
+      let countFlame = 0;
+for (let i = 1; i < lines.length; i++) {
+  const cols = lines[i].split(",").map(c => c.replace(/"/g,"").trim());
+
+  // 🕔 Vérifie l’heure (colonne 0 supposée être l’heure du point)
+  const timeStr = cols[0];
+  if (timeStr && /^(\d{2}):(\d{2})/.test(timeStr)) {
+    const [_, hh, mm] = timeStr.match(/^(\d{2}):(\d{2})/);
+    const hour = parseInt(hh, 10);
+
+    // ⏰ Ignore les valeurs avant 5h ou après 23h59
+    if (hour < 5 || hour >= 24) continue;
+  }
+
+  const vInf = idxInf !== undefined ? parseFloat(cols[idxInf]) : NaN;
+  const vSup = idxSup !== undefined ? parseFloat(cols[idxSup]) : NaN;
+
+if (
+    (isFinite(vInf) && vInf > 40 && vInf < 300) ||
+    (isFinite(vSup) && vSup > 40 && vSup < 300)
+) {
+    countFlame++;
+}
+
+}
+
+
+if (countFlame >= 1) {
+  // 🔥 Ajoute la flamme tout en préservant la note existante
+  const hadNote = tdFlame.innerHTML.includes("📝");
+if (!tdFlame.innerHTML.includes("🔥")) {
+  tdFlame.insertAdjacentHTML(
+    "afterbegin",
+    `<span class="flame" title="Brûleur actif détecté ce jour !">🔥</span>`
+  );
+}
+if (hadNote && !tdFlame.innerHTML.includes("📝")) {
+  tdFlame.insertAdjacentHTML(
+    "beforeend",
+    ` <span class="note" title="Note associée">📝</span>`
+  );
+}
+
+}
+
+
+// 📝 Si un JSON de la même date existe → conserver même si scan flamme réécrit
+const mNote = f.name.match(/(\d{8})\.csv$/i);
+if (mNote && jsonDates.has(mNote[1])) {
+  if (!tdFlame.innerHTML.includes("📝")) addNote(tdFlame);
+  tdFlame.dataset.hasNote = "true";
+}
+
+
+tdName.textContent = f.name;
+
+
+    } catch(e) {
+      console.error("Erreur flamme fichier:", f.name, e);
+      tdName.innerHTML = f.name;
+    }
+  })();
+}
+// === FIN FLAMME FILE ===
+
+
+
+const tdFolder=document.createElement('td'); tdFolder.textContent=folderName;
+
+    const tdSize = document.createElement('td');
+    if (f.size) {
+      tdSize.textContent = formatSize(f.size);
+      if (parseInt(f.size) < 200) {
+        tdSize.style.color = "#999";
+        tdSize.textContent += " (vide)";
+      } else {
+        tdSize.style.color = "inherit";
+      }
+    } else {
+      tdSize.textContent = '?';
+    }
+
+    const tdAction=document.createElement('td'); tdAction.className='action-cell';
+    let html='';
+if (f.name.toLowerCase().endsWith('.csv')) {
+
+  html += `<a href="https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(f.name)}&download=1&site=Smes_Acces" target="_blank">
+            <button class="action-btn" title="Télécharger le fichier">Télécharger</button>
+          </a>`;
+
+  html += `<button class="action-btn"
+        title="Afficher les données dans un tableau"
+        onclick="openViewer('viewer.html','${realId}','${f.name}')">
+  Tableau
+</button>
+`;
+
+  // 👇 bouton Courbes seulement si on n'est PAS dans Historique
+  if (!folderName.toLowerCase().includes("historique")) {
+    html += `<button class="action-btn"
+        title="Afficher les courbes des différentes données disponibles sur une période choisie"
+        onclick="openViewer('viewer02.html','${realId}','${f.name}')">
+  Courbes
+</button>
+`;
+  }
+
+  // 👇 bouton Sondes uniquement si on est dans Traça_Temp
+  if (folderName.toLowerCase().includes("traça_temp") || folderName.toLowerCase().includes("traca_temp")) {
+    html += `<button class="action-btn"
+        title="Visualiser les températures des sondes et les autres valeurs sur le plan du séchoir à un moment précis sur une sidebar"
+        onclick="openViewer('index03.html','${realId}','${f.name}')">
+  Sondes
+</button>
+`;
+  }
+}
+
+
+
+
+
+
+// === CONSOMMATION GAZ : placeholders + queue task ===
+if (
+  ENABLE_GAZ_CALC &&
+  folderName.toLowerCase().includes("consommation gaz") &&
+  f.name.toLowerCase().endsWith(".csv")
+) {
+  // 🟡 Groupe de 4 boutons d'affichage (placeholders)
+  html += `
+    <div class="gaz-group">
+      <button class="gaz-btn" title="kWh consommés sur la journée" disabled>⏳ kWh...</button>
+      <button class="gaz-btn" title="m³ consommés sur la journée" disabled>m³...</button>
+      <button class="gaz-btn" title="Durée de fonctionnement brûleur(s)" disabled>⏱ Temps...</button>
+      <button class="gaz-btn gaz-small" title="Consommation moyenne sur la journée" disabled>--</button>
+    </div>
+  `;
+
+  // ✅ on calcule APRÈS que la ligne est dans le DOM
+  gazTasks.push({ f, tdAction, tr, tdDate, siteId: siteIdForDisplay });
+
+}
+
+
+
+
+      
+
+
+
+
+// === HISTORIQUE : placeholder durée cycle ===
+if (
+  folderName.toLowerCase().includes("historique") &&
+  f.name.toUpperCase().startsWith("Z3") &&
+  f.name.toLowerCase().endsWith(".csv")
+) {
+
+  html += `
+    <div class="gaz-group">
+      <button class="gaz-btn" disabled>⏱ Calcul...</button>
+    </div>
+  `;
+
+  gazTasks.push({ f, tdAction, type: "historique" });
+}
+
+
+
+
+
+
+if (/\.(jpg|jpeg|png|gif|webp)$/i.test(f.name)) {
+
+  html += `<img src="https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(f.name)}&site=Smes_Acces"
+    onclick="openModal('${realId}')"
+    alt="aperçu">`;
+
+  html += `<a href="https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(f.name)}&download=1&site=Smes_Acces" target="_blank">
+            <button class="action-btn">Télécharger</button>
+          </a>`;
+}
+
+
+
+/* ✅ VIDEO (MP4/WEBM/MOV/M4V) */
+if (/\.(mp4|webm|mov|m4v)$/i.test(f.name)) {
+  html += `
+    <button class="action-btn" onclick="openModal('${realId}')">Ouvrir</button>
+    <a href="https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(f.name)}&download=1&site=Smes_Acces" target="_blank">
+      <button class="action-btn">Télécharger</button>
+    </a>
+  `;
+}
+
+
+
+
+// === PDF ===
+if (f.name.toLowerCase().endsWith(".pdf")) {
+  html += `
+    <a href="https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(f.name)}&download=1&site=Smes_Acces" target="_blank">
+      <button class="action-btn">Télécharger</button>
+    </a>
+    <button class="action-btn" onclick="openModal('${realId}')">Ouvrir</button>
+  `;
+}
+
+
+// === PowerPoint (ppsx/pptx) ===
+if (/\.(ppsx|pptx)$/i.test(f.name)) {
+  const baseUrl = `https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(f.name)}&site=Smes_Acces`;
+
+  html += `
+    <a href="${baseUrl}&download=1" target="_blank">
+      <button class="action-btn">Télécharger</button>
+    </a>
+    <a href="${baseUrl}" target="_blank">
+      <button class="action-btn">Ouvrir</button>
+    </a>
+  `;
+}
+
+
+
+  
+
+
+    tdAction.innerHTML=html;
+
+
+tr.appendChild(tdDate);
+    tr.appendChild(tdFlame);
+tr.appendChild(tdAction);
+tr.appendChild(tdName);
+tr.appendChild(tdFolder);
+tr.appendChild(tdSize);
+
+
+    tbody.appendChild(tr);
+  }
+
+// ✅ Lancer les calculs gaz avec limite de concurrence
+if (gazTasks.length) {
+  await runWithConcurrency(gazTasks, 6, async (task) => {
+    if (task.type === "historique") {
+      await computeHistoriqueForRow(task);
+    } else {
+      await computeGazForRow(task);
+    }
+  });
+
+    updateGazTotals();
+  updateHistoriqueTotals();
+
+}
+
+// 📝 Réinjection FORCÉE des notes (ne touche pas aux flammes)
+document.querySelectorAll('#csvTable tbody tr').forEach(tr => {
+  const nameCell = tr.cells[3];
+  const flameCell = tr.cells[1];
+
+  if (!nameCell || !flameCell) return;
+
+  const m = nameCell.textContent.match(/(\d{8})\.csv$/i);
+  if (!m) return;
+
+  const key = m[1];
+
+  if (storedNotes[key]) {
+    if (!flameCell.innerHTML.includes("📝")) {
+      const txt = storedNotes[key].join("\n");
+
+      flameCell.insertAdjacentHTML(
+        "beforeend",
+        ` <span class="note" title="${txt}">📝</span>`
+      );
+    }
+  }
+});
+
+  
+}
+
+
+
+
+
+  
+/* ----------- Open viewer (CSV list + index) ----------- */
+async function openViewer(viewer, id, name){
+  cancelScan = true; // 🛑 stoppe immédiatement tous les scans
+
+  const active = document.querySelector('#folderTree .active-folder');
+  if (!active) { alert("Sélectionnez un dossier !"); return; }
+
+  const folderId = localStorage.getItem('lastFolderId');
+
+  // 📂 Charger tous les fichiers du dossier courant
+  const files = await fetchFolderContents(folderId);
+
+  // 🧩 Séparer les fichiers CSV et JSON
+  const saFiles = files.filter(f =>
+    f.name.toUpperCase().startsWith("SA") &&
+    f.name.toLowerCase().endsWith(".csv")
+  );
+  const jsonFiles = files.filter(f =>
+    f.name.toLowerCase().endsWith(".json")
+  );
+
+  // 🔗 Récupérer les Z3 préchargés
+  const z3Files = JSON.parse(localStorage.getItem("csvZ3Files") || "[]");
+
+  // 🗒️ Ajouter les fichiers .json dans le cache
+  if (jsonFiles.length > 0) {
+    console.log(`[Notes] ${jsonFiles.length} fichiers .json ajoutés au cache`);
+    jsonFiles.forEach(jf => {
+      if (!jf.parents) jf.parents = [folderId];
+      if (!jf.mimeType) jf.mimeType = "application/json";
+    });
+  }
+
+  // 🧠 Fusionner le tout
+  const allCsv = [...saFiles, ...z3Files, ...jsonFiles];
+
+  function addFolderHierarchy(li, acc){
+    if (!li) return;
+    const nameSpan = li.querySelector('.folder-name');
+    const folderObj = { id: li.dataset.id, name: nameSpan ? nameSpan.textContent : '', parents: [] };
+    const parentLi = li.parentElement.closest('li');
+    if (parentLi) {
+      folderObj.parents.push(parentLi.dataset.id);
+      addFolderHierarchy(parentLi, acc);
+    }
+    if (!acc.find(x => x.id === folderObj.id)) {
+      acc.push(folderObj);
+    }
+  }
+
+  const activeLi = active.closest('li');
+  addFolderHierarchy(activeLi, allCsv);
+  allCsv.forEach(f => {
+    if (!f.parents) f.parents = [];
+    if (!f.parents.includes(activeLi.dataset.id)) {
+      f.parents.push(activeLi.dataset.id);
+    }
+  });
+
+  localStorage.setItem("csvFilesList", JSON.stringify(allCsv));
+  const index = allCsv.findIndex(f => getDriveFileId(f) === id);
+
+  localStorage.setItem("csvFileIndex", index);
+
+  // 🔍 Vérifier plan_sondes.csv
+  const planFile = files.find(f => f.name.toLowerCase() === "plan_sondes.csv");
+  let url = `${viewer}?fileId=${id}&fileName=${encodeURIComponent(name)}`;
+
+const folderPath = localStorage.getItem("lastFolderPath") || "";
+url += `&folderPath=${encodeURIComponent(folderPath)}`;
+console.log("[Viewer] Dossier ajouté à l’URL :", folderPath);
+  // 🔹 Sauvegarde explicite du chemin pour le viewer02
+localStorage.setItem("currentFolderPath", folderPath);
+
+
+
+  if (planFile) {
+    try {
+      const planId = getDriveFileId(planFile);
+const respPlan = await fetch(
+  `https://smes21540.netlify.app/.netlify/functions/drive?id=${planId}&name=${encodeURIComponent(planFile.name)}&site=Smes_Acces`
+);
+
+      const textPlan = await respPlan.text();
+      localStorage.setItem("planSondes", textPlan);
+    } catch (e) {
+      console.error("❌ Erreur lors du chargement du plan_sondes.csv", e);
+    }
+  } else {
+    localStorage.removeItem("planSondes");
+  }
+
+
+
+
+  window.open(url,'_blank');
+  setTimeout(() => { cancelScan = false; }, 1000);
+}
+
+
+
+
+/* ----------- Filtres ----------- */
+async function refreshCurrentFolder(){
+
+  const folderId = localStorage.getItem("lastFolderId");
+  if (!folderId) return;
+
+  // On retrouve le dossier actif
+  const li = document.querySelector(`#folderTree li[data-id="${folderId}"]`);
+
+  if (!li) {
+    console.warn("[FILTER] Dossier actif introuvable");
+    return;
+  }
+
+  // Recharge sans casser la sélection
+  await loadFolderFilesOnClick(li, null);
+}
+
+
+async function applyFilter(){
+  filterStartDate = document.getElementById('startDate').value;
+  filterEndDate   = document.getElementById('endDate').value;
+
+  await refreshCurrentFolder();
+}
+
+async function clearFilter(){
+  filterStartDate = '';
+  filterEndDate   = '';
+
+  fpStart?.clear();
+  fpEnd?.clear();
+
+  // ✅ désactive campagne
+  activeCampaignKey = "";
+  document.querySelectorAll(".campaign-btn").forEach(b => b.classList.remove("active"));
+
+  const ys = document.getElementById("yearSelect");
+  if (ys) ys.value = "";
+
+  await refreshCurrentFolder();
+}
+
+function resetDateFilterUIAndState(){
+  filterStartDate = "";
+  filterEndDate = "";
+
+  fpStart?.clear();
+  fpEnd?.clear();
+
+  // retire l'affichage des champs masqués/visibles
+  document.querySelectorAll(".date-field").forEach(df => df.classList.remove("has-date"));
+
+  // reset campagne visuelle
+  activeCampaignKey = "";
+  document.querySelectorAll(".campaign-btn").forEach(b => b.classList.remove("active"));
+}
+
+
+
+  
+/* ----------- Modale images / pdf / video + navigation ----------- */
+
+function openModal(id) {
+  currentPreviewIndex = previewFiles.findIndex(f => (f._realId || f.id) === id);
+  const file = previewFiles[currentPreviewIndex];
+  if (!file) return;
+
+  const realId = file._realId || file.id;
+
+  const modal = document.getElementById('imageModal');
+  modal.style.display = 'flex';
+
+  const frame = document.getElementById('modalFrame');
+  const video = document.getElementById('modalVideo');
+  const img   = document.getElementById('modalImg');
+
+  const url =
+    `https://smes21540.netlify.app/.netlify/functions/drive` +
+    `?id=${realId}&name=${encodeURIComponent(file.name)}&site=Smes_Acces`;
+
+  const isVideo = /\.(mp4|webm|mov|m4v)$/i.test(file.name);
+  const isPdf   = /\.pdf$/i.test(file.name);
+  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
+
+  // Reset
+  frame.style.display = "none"; frame.src = "";
+  video.pause(); video.style.display = "none"; video.src = "";
+  img.style.display = "none"; img.src = "";
+
+  if (isVideo) {
+    video.style.display = "block";
+    video.src = url;
+    video.load();
+  } else if (isPdf) {
+    frame.style.display = "block";
+    frame.src = url;
+  } else if (isImage) {
+    img.style.display = "block";
+    img.src = url;
+  } else {
+    frame.style.display = "block";
+    frame.src = url;
+  }
+
+  document.getElementById('downloadBtn').onclick = () => {
+    window.open(
+      `https://smes21540.netlify.app/.netlify/functions/drive` +
+      `?id=${realId}&name=${encodeURIComponent(file.name)}` +
+      `&download=1&site=Smes_Acces`,
+      '_blank'
+    );
+  };
+}
+
+
+
+/* ----------- Fermeture modale ----------- */
+
+function closeModal(){
+
+  const modal = document.getElementById('imageModal');
+  modal.style.display = 'none';
+
+  const frame = document.getElementById('modalFrame');
+  const video = document.getElementById('modalVideo');
+  const img   = document.getElementById('modalImg');
+
+  // stop + nettoyage
+  frame.src = "";
+
+  video.pause();
+  video.src = "";
+  video.style.display = "none";
+
+  img.src = "";
+  img.style.display = "none";
+}
+
+
+/* ----------- Boutons navigation ----------- */
+
+document.getElementById('prevBtn').onclick = () => {
+  if (currentPreviewIndex > 0) {
+    const f = previewFiles[--currentPreviewIndex];
+    openModal(f._realId || f.id);
+  }
+};
+
+document.getElementById('nextBtn').onclick = () => {
+  if (currentPreviewIndex < previewFiles.length - 1) {
+    const f = previewFiles[++currentPreviewIndex];
+    openModal(f._realId || f.id);
+  }
+};
+
+
+
+/* ----------- Click hors contenu = fermer ----------- */
+
+window.addEventListener('click', e => {
+  const modal = document.getElementById('imageModal');
+  if (e.target === modal) closeModal();
+});
+
+
+/* ----------- Navigation clavier ----------- */
+
+window.addEventListener('keydown', e => {
+
+  const modal = document.getElementById('imageModal');
+  if (modal.style.display !== 'flex') return;
+
+if (e.key === 'ArrowLeft' && currentPreviewIndex > 0) {
+  const f = previewFiles[--currentPreviewIndex];
+  openModal(f._realId || f.id);
+}
+
+if (e.key === 'ArrowRight' && currentPreviewIndex < previewFiles.length - 1) {
+  const f = previewFiles[++currentPreviewIndex];
+  openModal(f._realId || f.id);
+}
+
+
+  if (e.key === 'Escape') {
+    closeModal();
+  }
+});
+
+
+
+/* ----------- ZIP overlay + progression + annulation ----------- */
+const zipOverlay=document.getElementById('zipOverlay');
+const zipProgress=document.getElementById('zipProgress');
+const zipCounter=document.getElementById('zipCounter');
+const zipFileName=document.getElementById('zipFileName');
+const zipTime=document.getElementById('zipTime');
+const zipClose=document.getElementById('zipClose');
+let zipCancelled=false, zipStartTime=0;
+
+function sanitizeFileName(name){ return name.replace(/[\/\:*?"<>|]/g,"_"); }
+
+function showZipOverlay(name){
+  zipCancelled=false;
+  zipOverlay.style.display='flex';
+  zipFileName.textContent=name;
+  zipProgress.style.width='0%';
+  zipProgress.textContent='0%';
+  zipCounter.textContent='0 / 0 fichiers';
+  zipTime.textContent='Temps restant : --';
+  zipStartTime=Date.now();
+}
+function hideZipOverlay(){zipOverlay.style.display='none';}
+function updateZipProgress(pct,current,total,sizeAccum){
+  zipProgress.style.width=pct+'%';
+  zipProgress.textContent=pct+'%';
+  zipCounter.textContent=`${current} / ${total} fichiers`;
+  if(current>0){
+    const elapsed=(Date.now()-zipStartTime)/1000;
+    const speedFiles=current/elapsed;
+    const speedKB=(sizeAccum/1024)/elapsed;
+    const remainingFiles=total-current;
+    const remainingTime=remainingFiles/Math.max(speedFiles,0.0001);
+    const mins=Math.floor(remainingTime/60);
+    const secs=Math.round(remainingTime%60);
+    zipTime.textContent=`Temps restant : ${mins>0?mins+'m ':''}${secs}s (${speedFiles.toFixed(1)} fichiers/s, ${Math.max(0,speedKB).toFixed(0)} Ko/s)`;
+  }
+}
+zipClose.onclick=()=>{zipCancelled=true;hideZipOverlay();alert("Préparation ZIP annulée.");};
+
+document.getElementById('downloadFolderBtn').onclick=async()=>{
+  const active=document.querySelector('#folderTree .active-folder');
+  if(!active){alert("Sélectionnez un dossier !"); return;}
+  const folderId=localStorage.getItem('lastFolderId');
+  const folderName=active.textContent.trim();
+  showZipOverlay(folderName+".zip");
+  const files=await fetchFolderContents(folderId);
+  if(!files||files.length===0){hideZipOverlay();alert("Aucun fichier dans ce dossier."); return;}
+  const zip=new JSZip(); let count=0; let doneSize=0;
+  for(const f of files){
+    if(zipCancelled) return;
+    try{
+const realId = getDriveFileId(f);
+const url = `https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(f.name)}&site=Smes_Acces`;
+
+
+const res = await fetch(url);
+
+      if(!res.ok) throw new Error('Fetch media failed: '+res.status);
+      const blob=await res.blob();
+      zip.file(sanitizeFileName(f.name), blob);
+      count++; doneSize += f.size ? parseInt(f.size) : 0;
+      updateZipProgress(Math.round((count/files.length)*100), count, files.length, doneSize);
+    }catch(e){console.error("Erreur sur",f.name,e);}
+  }
+  if(zipCancelled) return;
+  const content=await zip.generateAsync({type:"blob"});
+  saveAs(content, folderName+".zip");
+  hideZipOverlay();
+};
+
+/* ----------- Tri tableau + recolorisation ----------- */
+let currentSort = { col: null, asc: true };
+
+function sortTable(colIndex, type) {
+  const table = document.getElementById("csvTable");
+  const tbody = table.tBodies[0];
+  const rows = Array.from(tbody.querySelectorAll("tr"));
+
+  if (currentSort.col === colIndex) {
+    currentSort.asc = !currentSort.asc;
+  } else {
+    currentSort.col = colIndex;
+    currentSort.asc = true;
+  }
+
+  rows.sort((a, b) => {
+    let aText = a.cells[colIndex]?.textContent.trim() || "";
+    let bText = b.cells[colIndex]?.textContent.trim() || "";
+    if (type === "number") {
+      aText = parseFloat(aText) || 0;
+      bText = parseFloat(bText) || 0;
+    } else if (type === "date") {
+      aText = new Date(aText).getTime() || 0;
+      bText = new Date(bText).getTime() || 0;
+    }
+    if (aText < bText) return currentSort.asc ? -1 : 1;
+    if (aText > bText) return currentSort.asc ? 1 : -1;
+    return 0;
+  });
+
+  tbody.innerHTML = "";
+  rows.forEach(r => tbody.appendChild(r));
+
+  // mise à jour des flèches
+  document.querySelectorAll("thead th .sort-arrow").forEach(span => span.textContent = "");
+  const arrow = table.tHead.rows[0].cells[colIndex].querySelector(".sort-arrow");
+  if (arrow) arrow.textContent = currentSort.asc ? "▲" : "▼";
+}
+
+
+/* ----------- Menu secret (thèmes) ----------- */
+document.getElementById("secretBtn").onclick=()=>{
+  const menu=document.getElementById("themeMenu");
+  if(menu.style.display==="block"){ closeThemeMenu(); }
+  else { menu.style.display="block"; resetThemeMenuTimer(); }
+};
+function resetThemeMenuTimer(){ clearTimeout(themeMenuTimer); themeMenuTimer=setTimeout(closeThemeMenu,10000); }
+function closeThemeMenu(){ document.getElementById("themeMenu").style.display="none"; clearTimeout(themeMenuTimer); }
+
+/* ----------- Thèmes + persistance (+ lignes du tableau) ----------- */
+function setTheme(theme){
+  document.body.setAttribute("data-theme", theme);
+  const r=document.documentElement;
+  const logo=document.getElementById("mainLogo");
+  logo.style.display=(theme==="orange")?"block":"none";
+  localStorage.setItem("selectedTheme",theme);
+
+  if(theme==="orange"){
+    r.style.setProperty("--accent","#ff7043");
+    r.style.setProperty("--accent-darker","#e64a19");
+    r.style.setProperty("--accent-muted","#ffccbc");
+    r.style.setProperty("--bg","#fff5f5");
+    r.style.setProperty("--panel","#ffffff");
+    r.style.setProperty("--sidebar-bg","#ffe5d9");
+    r.style.setProperty("--danger","#d84315");
+    r.style.setProperty("--text","#333");
+    r.style.setProperty("--row-even","#ffe5d9");
+    r.style.setProperty("--row-odd","#fff5f5");
+  }
+  if(theme==="blue"){
+    r.style.setProperty("--accent","#2196f3");
+    r.style.setProperty("--accent-darker","#1976d2");
+    r.style.setProperty("--accent-muted","#bbdefb");
+    r.style.setProperty("--bg","#e3f2fd");
+    r.style.setProperty("--panel","#ffffff");
+    r.style.setProperty("--sidebar-bg","#bbdefb");
+    r.style.setProperty("--danger","#0d47a1");
+    r.style.setProperty("--text","#0d47a1");
+    r.style.setProperty("--row-even","#bbdefb");
+    r.style.setProperty("--row-odd","#e3f2fd");
+  }
+  if(theme==="green"){
+    r.style.setProperty("--accent","#4caf50");
+    r.style.setProperty("--accent-darker","#2e7d32");
+    r.style.setProperty("--accent-muted","#c8e6c9");
+    r.style.setProperty("--bg","#f1f8e9");
+    r.style.setProperty("--panel","#ffffff");
+    r.style.setProperty("--sidebar-bg","#c8e6c9");
+    r.style.setProperty("--danger","#1b5e20");
+    r.style.setProperty("--text","#1b5e20");
+    r.style.setProperty("--row-even","#c8e6c9");
+    r.style.setProperty("--row-odd","#f1f8e9");
+  }
+  if(theme==="purple"){
+    r.style.setProperty("--accent","#9c27b0");
+    r.style.setProperty("--accent-darker","#6a1b9a");
+    r.style.setProperty("--accent-muted","#e1bee7");
+    r.style.setProperty("--bg","#f3e5f5");
+    r.style.setProperty("--panel","#ffffff");
+    r.style.setProperty("--sidebar-bg","#e1bee7");
+    r.style.setProperty("--danger","#4a148c");
+    r.style.setProperty("--text","#4a148c");
+    r.style.setProperty("--row-even","#e1bee7");
+    r.style.setProperty("--row-odd","#f3e5f5");
+  }
+  if(theme==="bordeaux"){
+    r.style.setProperty("--accent","#800020");
+    r.style.setProperty("--accent-darker","#4b0014");
+    r.style.setProperty("--accent-muted","#d7a1a9");
+    r.style.setProperty("--bg","#fff0f2");
+    r.style.setProperty("--panel","#ffffff");
+    r.style.setProperty("--sidebar-bg","#f3cdd3");
+    r.style.setProperty("--danger","#600018");
+    r.style.setProperty("--text","#4b0014");
+    r.style.setProperty("--row-even","#f3cdd3");
+    r.style.setProperty("--row-odd","#fff0f2");
+  }
+}
+
+/* ----------- 🔥 Gestion des jours chauds par site ----------- */
+const FLAME_MIN_LINES = 5;
+let currentSiteId = null;
+let hotDaysMap = {}; // { 'YYYYMMDD': true }
+
+async function scanSiteHotDays(siteId) {
+
+  if (isUserNavigating) return {};   // 🚫 scan passif
+
+startScan(); 
+  
+  const hotDays = {};
+  console.time(`[SCAN] Durée scanSiteHotDays (${siteId})`);
+  console.log(`[SCAN] Scan du site ${siteId} → dossier Traça_Temp`);
+
+  try {
+const siblings = await fetchFolderContents(siteId);
+
+const tracatemp = siblings.find(s =>
+  isDriveFolderOrShortcutFolder(s) &&
+  (
+    (s.name || "").toLowerCase().includes("traça_temp") ||
+    (s.name || "").toLowerCase().includes("traca_temp")
+  )
+);
+
+
+if (!tracatemp) {
+  console.warn(`[SCAN] Aucun dossier Traça_Temp trouvé pour le site ${siteId}`);
+  return hotDays;
+}
+
+const tracatempId = getDriveFolderId(tracatemp);     // ✅ ID réel (targetId si shortcut)
+const files = await fetchFolderContents(tracatempId);
+
+    const csvFiles = files.filter(f => f.name.toLowerCase().endsWith(".csv"));
+    console.log(`[SCAN] ${csvFiles.length} CSV trouvés dans ${tracatemp.name}`);
+
+    for (const f of csvFiles) {
+      try {
+const realId = getDriveFileId(f);
+const res = await fetch(
+  `https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(f.name)}&site=Smes_Acces`
+);
+
+        if (!res.ok) continue;
+
+        const text = await res.text();
+        const lines = text.split(/\r?\n/).filter(l => l.trim() !== "");
+        if (lines.length < 2) continue;
+
+        const headers = lines[0].split(",").map(h => h.replace(/"/g, "").trim().toLowerCase());
+
+        // 🔍 2ème occurrence (comme ton ancien index)
+        let idxInf = headers.map((h,i)=>({h,i})).filter(o=>o.h.includes("sonde ac inf"))[1]?.i;
+        let idxSup = headers.map((h,i)=>({h,i})).filter(o=>o.h.includes("sonde ac sup"))[1]?.i;
+        if (idxInf === undefined && idxSup === undefined) continue;
+
+        let countFlame = 0;
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(",").map(c => c.replace(/"/g, "").trim());
+
+          // 🕔 ignore la nuit (<5h)
+          const timeStr = cols[0];
+          if (timeStr && /^(\d{2}):(\d{2})/.test(timeStr)) {
+            const [_, hh] = timeStr.match(/^(\d{2}):/);
+            const hour = parseInt(hh, 10);
+            if (hour < 5) continue;
+          }
+
+          const vInf = idxInf !== undefined ? parseFloat(cols[idxInf]) : NaN;
+          const vSup = idxSup !== undefined ? parseFloat(cols[idxSup]) : NaN;
+
+if (
+    (isFinite(vInf) && vInf > 40 && vInf < 300) ||
+    (isFinite(vSup) && vSup > 40 && vSup < 300)
+) {
+    countFlame++;
+}
+
+        }
+
+        if (countFlame >= 1) {
+          const m = f.name.match(/(\d{8})\.csv$/i);
+          if (m) hotDays[m[1]] = true;
+        }
+
+      } catch (e) {
+        console.warn(`[SCAN] Erreur lecture fichier ${f.name}:`, e);
+      }
+    }
+
+console.log(`[SCAN] 🔥 ${Object.keys(hotDays).length} jours chauds détectés pour le site`);
+console.timeEnd(`[SCAN] Durée scanSiteHotDays (${siteId})`);
+localStorage.setItem(`hotDays_${siteId}`, JSON.stringify(hotDays));
+
+// ✅ Recharge les calendriers maintenant que hotDaysMap est prêt
+initDatePickers();
+
+return hotDays;
+
+
+  } catch (err) {
+    console.error("[SCAN] Erreur générale scanSiteHotDays:", err);
+    console.timeEnd(`[SCAN] Durée scanSiteHotDays (${siteId})`);
+    return hotDays;
+      } finally {
+    endScan();   // 🔄 FIN INDICATEUR
+  }
+}
+
+
+function loadSiteHotDays(siteId) {
+  const data = localStorage.getItem(`hotDays_${siteId}`);
+  return data ? JSON.parse(data) : {};
+}
+
+
+function clearSiteHotDays() {
+  if (currentSiteId) {
+    localStorage.removeItem(`hotDays_${currentSiteId}`);
+  }
+  hotDaysMap = {};
+  currentSiteId = null;
+}
+
+
+
+
+/* ----------- 🔥 Vérif CSV du jour pour "Temp" ----------- */
+async function checkTraçaTempToday(parentLi, tracatempId) {
+
+  if (isUserNavigating) return;   // 🚫 bloque le scan pendant navigation
+
+
+  // 🚫 ne jamais agir si on n’est pas dans Traça_Temp
+  const activePath = localStorage.getItem("lastFolderPath") || "";
+  if (!activePath.toLowerCase().includes("traça_temp") &&
+      !activePath.toLowerCase().includes("traca_temp")) {
+    return;
+  }
+
+  
+  const today = new Date();
+  const yyyymmdd =
+    today.getFullYear().toString() +
+    String(today.getMonth() + 1).padStart(2, "0") +
+    String(today.getDate()).padStart(2, "0");
+
+  const files = await fetchFolderContents(tracatempId);
+  // accepter tout CSV contenant la date du jour
+  const todayFile = files.find(f => f.name.includes(yyyymmdd) && f.name.endsWith(".csv"));
+  if (!todayFile) return;
+
+  try {
+const realId = getDriveFileId(todayFile);
+const url = `https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(todayFile.name)}&t=${Date.now()}&site=Smes_Acces`;
+
+
+const res = await fetch(url);
+
+    const text = await res.text();
+
+    // lire les dernières lignes
+    const lines = text.split(/\r?\n/).filter(l => l.trim() !== "");
+    const lastLine = lines[lines.length - 1];
+    if (!lastLine) return;
+
+    // Nettoyage : enlever guillemets et espaces
+    const headers = lines[0].split(",").map(h => h.replace(/"/g, "").trim());
+    const cols = lastLine.split(",").map(c => c.replace(/"/g, "").trim());
+
+    // Trouver la 2ème occurrence de "Sonde AC Sup"
+    let supIndices = headers
+      .map((h, i) => ({ h, i }))
+      .filter(o => o.h.toLowerCase().includes("sonde ac sup"));
+    let idxSup = supIndices.length >= 2 ? supIndices[1].i : supIndices[0]?.i;
+
+    // Trouver la 2ème occurrence de "Sonde AC Inf"
+    let infIndices = headers
+      .map((h, i) => ({ h, i }))
+      .filter(o => o.h.toLowerCase().includes("sonde ac inf"));
+    let idxInf = infIndices.length >= 2 ? infIndices[1].i : infIndices[0]?.i;
+
+    // Valeurs
+    const vSup = idxSup !== undefined ? parseFloat(cols[idxSup]) : NaN;
+    const vInf = idxInf !== undefined ? parseFloat(cols[idxInf]) : NaN;
+
+    // 🔥 seuil
+    if (
+    (isFinite(vSup) && vSup > 40 && vSup < 300) ||
+    (isFinite(vInf) && vInf > 40 && vInf < 300)
+)
+ {
+      markFolderWithFlame(parentLi);
+    }
+
+
+  } catch (e) {
+    console.error("Erreur lecture CSV dans Temp", e);
+  }
+}
+
+function markFolderWithFlame(li) {
+  if (!li) return; // sécurité
+
+  const span = li.querySelector(".folder-name");
+  if (!(span instanceof HTMLElement)) return; // évite les erreurs de type
+
+  if (!span.classList.contains("has-flame")) {
+    span.classList.add("has-flame");
+    span.innerHTML = `<span class="flame-folder" title="Brûleur(s) actuellement en fonctionnement">🔥</span> ` + span.innerHTML;
+  }
+
+  const parent = li.parentElement?.closest("li");
+  if (parent) markFolderWithFlame(parent);
+}
+
+
+/* ----------- Datepickers enrichis (Flatpickr) ----------- */
+let fpStart = null;
+let fpEnd = null;
+  let suppressAutoFilter = false;
+
+
+function initDatePickers() {
+  const commonOpts = {
+    dateFormat: "Y-m-d",
+    locale: flatpickr.l10ns.fr, // ✅ langue française correcte
+    allowInput: true,
+    clickOpens: true,
+
+    // 💡 Dès l’ouverture → coloration immédiate des jours chauds
+    onOpen: function(selectedDates, dateStr, instance) {
+      recolorHotDays(instance);
+    },
+    onReady: function(selectedDates, dateStr, instance) {
+      recolorHotDays(instance);
+    },
+    onMonthChange: function(selectedDates, dateStr, instance) {
+      recolorHotDays(instance);
+    },
+    onYearChange: function(selectedDates, dateStr, instance) {
+      recolorHotDays(instance);
+    },
+
+onChange: async function(selectedDates, dateStr, instance) {
+
+  const parent = instance.input.closest(".date-field");
+
+  if (dateStr) parent.classList.add("has-date");
+  else parent.classList.remove("has-date");
+
+  // ✅ si on change les dates via bouton campagne → on ne déclenche pas ici
+  if (suppressAutoFilter) return;
+
+  filterStartDate = document.getElementById("startDate").value;
+  filterEndDate   = document.getElementById("endDate").value;
+
+  await refreshCurrentFolder();
+
+  const ys = document.getElementById("yearSelect");
+  if (ys) ys.value = "";
+},
+
+
+
+
+onDayCreate: function(dObj, dStr, fp, dayElem) {
+  const yyyymmdd = dayElem.dateObj.getFullYear().toString() +
+    String(dayElem.dateObj.getMonth() + 1).padStart(2, "0") +
+    String(dayElem.dateObj.getDate()).padStart(2, "0");
+  if (hotDaysMap && hotDaysMap[yyyymmdd]) {
+    dayElem.classList.add("hot-day");
+    dayElem.title = "Jour chaud détecté";
+  }
+}
+
+  };
+
+  // 🔄 Détruire les anciens calendriers pour forcer le redraw
+  if (fpStart) fpStart.destroy();
+  if (fpEnd) fpEnd.destroy();
+
+// 📅 Icônes calendrier (plus grandes) + positionnement localisé
+const iconStart = document.getElementById("iconStart");
+const iconEnd = document.getElementById("iconEnd");
+
+fpStart = flatpickr("#startDate", {
+  ...commonOpts,
+  positionElement: iconStart, // 👈 s’affiche collé à l’icône
+});
+fpEnd = flatpickr("#endDate", {
+  ...commonOpts,
+  positionElement: iconEnd,   // 👈 idem
+});
+
+// 📅 clic sur les icônes pour ouvrir le calendrier
+if (iconStart) iconStart.onclick = () => fpStart.open();
+if (iconEnd) iconEnd.onclick = () => fpEnd.open();
+
+}
+
+
+/* ----------- Coloration des jours chauds ----------- */
+function recolorHotDays(instance) {
+  const days = instance.calendarContainer.querySelectorAll(".flatpickr-day");
+  days.forEach(dayElem => {
+    const yyyymmdd = dayElem.dateObj.getFullYear().toString() +
+  String(dayElem.dateObj.getMonth() + 1).padStart(2, "0") +
+  String(dayElem.dateObj.getDate()).padStart(2, "0");
+
+    if (hotDaysMap && hotDaysMap[yyyymmdd]) {
+      dayElem.classList.add("hot-day");
+      dayElem.title = "Jour chaud détecté";
+    } else {
+      dayElem.classList.remove("hot-day");
+      dayElem.removeAttribute("title");
+    }
+  });
+}
+
+
+/* ----------- Export CSV (Gaz) ----------- */
+document.getElementById("exportCsvBtn").addEventListener("click", async function () {
+
+    const rows = Array.from(document.querySelectorAll("#csvTable tbody tr"))
+        .filter(r => r.style.display !== "none");
+
+    if (rows.length === 0) {
+        alert("Aucune ligne visible à exporter.");
+        return;
+    }
+
+    let csv = "Date,ConsokWh,ConsoM3,Duree,DureeMinutes,Moyenne(kWh/h),Tonnage\n";
+
+    for (const row of rows) {
+
+        // --- DATE ---
+        let date = row.querySelector("td:nth-child(1)")?.textContent.split(" ")[0] || "0";
+        if (!date) date = "0";
+
+        const btns = row.querySelectorAll(".gaz-group .gaz-btn");
+        if (btns.length !== 4) continue;
+
+        // --- KWH ---
+        let kwh = btns[0].textContent.replace(/[^\d.-]/g, "");
+        if (kwh === "" || isNaN(kwh)) kwh = "0";
+
+        // --- M3 ---
+        let m3 = btns[1].textContent.replace(/[^\d.-]/g, "");
+        if (m3 === "" || isNaN(m3)) m3 = "0";
+
+        // --- DUREE (HH:MM) ---
+        let duree = btns[2].textContent.replace(/[^0-9:]/g, "");
+        if (!duree.includes(":")) duree = "0";
+
+        // --- DUREE MINUTES ---
+        let mins = 0;
+        if (duree !== "0") {
+            const p = duree.split(":");
+            const h = parseInt(p[0], 10);
+            const m = parseInt(p[1], 10);
+            mins = (isNaN(h) || isNaN(m)) ? 0 : (h * 60 + m);
+        }
+
+        // --- MOYENNE ---
+        let avg = btns[3].textContent.replace(/[^\d.-]/g, "");
+        if (avg === "" || isNaN(avg)) avg = "0";
+
+let tonnage = 0;
+if (row.dataset.tonnage) {
+    tonnage = parseFloat(row.dataset.tonnage);
+    tonnage = Number(tonnage.toFixed(1)); // 🔥 arrondi à 0.1 tonne
+}
+
+
+
+        csv += `${date},${kwh},${m3},${duree},${mins},${avg},${tonnage}\n`;
+    }
+
+// 1️⃣ Sauvegarde du CSV pour viewer02
+localStorage.setItem("exportGazCsvData", csv);
+
+// 2️⃣ Ouvre viewer03 en mode courbes
+window.open("viewer03.html?export_gaz=1", "_blank");
+
+});
+
+
+document.getElementById("exportExcelGazBtn").addEventListener("click", function () {
+
+    const rows = Array.from(document.querySelectorAll("#csvTable tbody tr"))
+        .filter(r => r.style.display !== "none");
+
+    if (rows.length === 0) {
+        alert("Aucune ligne visible à exporter.");
+        return;
+    }
+
+    const data = [];
+    data.push([
+        "Date",
+        "kWh consommés",
+        "m³ consommés",
+        "Durée (HH:mm)",
+        "Durée (minutes)",
+        "Moyenne kWh/h",
+        "Tonnage"
+    ]);
+
+    for (const row of rows) {
+
+        // 1️⃣ Date
+        let date = row.querySelector("td:nth-child(1)")?.textContent.split(" ")[0] || "";
+
+        // 2️⃣ Boutons gaz
+        const btns = row.querySelectorAll(".gaz-group .gaz-btn");
+        if (btns.length !== 4) continue;
+
+        const kwh   = parseFloat(btns[0].textContent.replace(/[^\d.-]/g, "")) || 0;
+        const m3    = parseFloat(btns[1].textContent.replace(/[^\d.-]/g, "")) || 0;
+        const duree = btns[2].textContent.replace(/[^0-9:]/g, "") || "00:00";
+        const avg   = parseFloat(btns[3].textContent.replace(/[^\d.-]/g, "")) || 0;
+
+        let mins = 0;
+        if (duree.includes(":")) {
+            const [h, m] = duree.split(":");
+            mins = (parseInt(h) * 60) + parseInt(m);
+        }
+
+        // 3️⃣ Tonnage stocké par displayFiles()
+        let tonnage = parseFloat(row.dataset.tonnage) || 0;
+        tonnage = Number(tonnage.toFixed(1));
+
+        data.push([date, kwh, m3, duree, mins, avg, tonnage]);
+    }
+
+    // Génération Excel
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Consommation Gaz");
+
+    XLSX.writeFile(wb, `export_gaz_${new Date().toISOString().slice(0,10)}.xlsx`);
+});
+
+
+
+// =========================================
+// === Calcule les valeurs GAZ pour une ligne
+// =========================================
+async function computeGazForRow({ f, tdAction, tr, tdDate, siteId }) {
+  startScan();   // 🔄 DÉBUT badge
+
+  try {
+const realId = getDriveFileId(f);
+const res = await fetch(
+  `https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(f.name)}&site=Smes_Acces`
+);
+
+  if (!res.ok) throw new Error("Fetch CSV GAZ failed: " + res.status);
+
+  const text = await res.text();
+  const lines = text.split(/\r?\n/).filter(l => l.trim() !== "");
+
+  let diffMinutes = 0;
+  let diffKwh = 0;
+  let diffM3 = 0;
+  let kwhEstime = false;
+
+  if (lines.length > 2) {
+    const firstCols = lines[1].split(",");
+    const lastCols  = lines[lines.length - 1].split(",");
+
+    // 1) kWh brut
+    const kFirst = parseFloat(firstCols[2].replace(/"/g,""));
+    const kLast  = parseFloat(lastCols[2].replace(/"/g,""));
+    if (isFinite(kFirst) && isFinite(kLast)) diffKwh = kLast - kFirst;
+
+    // 2) m³
+    const m3First = parseFloat(firstCols[4].replace(/"/g,""));
+    const m3Last  = parseFloat(lastCols[4].replace(/"/g,""));
+    if (isFinite(m3First) && isFinite(m3Last)) diffM3 = m3Last - m3First;
+
+    // 3) durée active (minutes)
+    let active = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const prev = lines[i - 1].split(",");
+      const curr = lines[i].split(",");
+      const kPrev = parseFloat(prev[2].replace(/"/g,""));
+      const kCurr = parseFloat(curr[2].replace(/"/g,""));
+      if (isFinite(kPrev) && isFinite(kCurr) && kCurr > kPrev) active++;
+    }
+    diffMinutes = active;
+  }
+
+  // Récup boutons
+  const btns = tdAction.querySelectorAll(".gaz-btn");
+  if (btns.length < 4) return;
+
+  const btnKwh    = btns[0];
+  const btnM3     = btns[1];
+  const btnHeures = btns[2];
+  const btnAvg    = btns[3];
+
+  // Si aucune activité -> masque
+  if ((diffM3 === 0 || !isFinite(diffM3)) && (diffKwh === 0 || !isFinite(diffKwh))) {
+    btns.forEach(b => b.style.display = "none");
+    return;
+  }
+
+  // Affichage m³ + dégradé
+  btnM3.textContent = diffM3.toFixed(1) + " m³";
+  btnM3.style.minWidth = "125px";
+  btnM3.style.color = "#5d4037";
+
+  const minM3 = 1000;
+  const maxM3 = 5000;
+  let ratio = (diffM3 - minM3) / (maxM3 - minM3);
+  ratio = Math.max(0, Math.min(1, ratio));
+
+  const r1 = 255, g1 = 245, b1 = 157;
+  const r2 = 255, g2 = 112, b2 = 67;
+  const r = Math.round(r1 + (r2 - r1) * ratio);
+  const g = Math.round(g1 + (g2 - g1) * ratio);
+  const b = Math.round(b1 + (b2 - b1) * ratio);
+  const color1 = `rgb(${r},${g},${b})`;
+  const color2 = `rgb(${Math.max(r-20,0)},${Math.max(g-20,0)},${Math.max(b-20,0)})`;
+  btnM3.style.background = `linear-gradient(180deg, ${color1}, ${color2})`;
+
+  // kWh (avec correction)
+  let rounded = Math.round(diffKwh);
+  if (rounded < 0 || rounded > 400000) {
+    rounded = Math.round(diffM3 * 32.3);
+    kwhEstime = true;
+  }
+
+  // durée
+  const H = String(Math.floor(diffMinutes / 60)).padStart(2,"0");
+  const M = String(diffMinutes % 60).padStart(2,"0");
+  const dureeFormatee = `${H}:${M}`;
+
+  btnHeures.textContent = `⏱ ${dureeFormatee}`;
+  btnHeures.style.background = "linear-gradient(180deg, #bbdefb, #64b5f6)";
+  btnHeures.style.color = "#0d47a1";
+  btnHeures.style.minWidth = "120px";
+
+  // moyenne kWh/h
+  const hours = diffMinutes / 60;
+  let avg = 0;
+  let moyenneEstimee = false;
+
+  if (hours > 0 && rounded > 0) {
+    avg = rounded / hours;
+    if (avg < 1000) {
+      rounded = Math.round(diffM3 * 32.3);
+      avg = rounded / hours;
+      moyenneEstimee = true;
+      kwhEstime = true;
+    }
+    btnAvg.textContent = `${avg.toFixed(1)} kWh/h`;
+  } else {
+    btnAvg.textContent = "--";
+  }
+
+  // affichage kWh
+  const padded = String(rounded).padStart(7, " ");
+  btnKwh.textContent = `${padded} kWh`;
+  btnKwh.style.minWidth = "120px";
+
+  if (kwhEstime || moyenneEstimee) {
+    btnKwh.style.background = "linear-gradient(180deg, #bbdefb, #42a5f5)";
+    btnKwh.style.color = "#0d47a1";
+    btnAvg.style.background = "linear-gradient(180deg, #c5cae9, #7986cb)";
+    btnAvg.style.color = "#1a237e";
+  } else {
+    btnKwh.style.background = "linear-gradient(180deg, #ffd54f, #ffb300)";
+    btnKwh.style.color = "#3e2723";
+    btnAvg.style.background = "linear-gradient(180deg, #e1f5fe, #81d4fa)";
+    btnAvg.style.color = "#01579b";
+  }
+
+  // TONNAGE (reprend ton code)
+  const dateStr = tdDate.textContent.split(" ")[0];
+let tonnage = 0;
+if (siteId && dateStr) {
+  tonnage = await getTonnageForDate(siteId, dateStr);
+}
+
+
+
+
+if (tonnage === null || !isFinite(tonnage)) {
+  tr.dataset.tonnage = "";
+} else {
+  tr.dataset.tonnage = Number(tonnage.toFixed(1));
+}
+
+  } finally {
+    endScan();   // 🔄 FIN badge
+  }
+    
+}
+
+
+
+
+// === Fonction de cumul global des GAZ ===
+function updateGazTotals() {
+  const totalM3Span = document.querySelector(".gaz-total-m3");
+  const totalKwhSpan = document.querySelector(".gaz-total-kwh");
+  if (!totalM3Span || !totalKwhSpan) return; // pas de pastilles visibles
+
+  let totalM3 = 0;
+  let totalKwh = 0;
+
+
+  
+
+document.querySelectorAll("#csvTable tbody tr").forEach(tr => {
+  if (tr.style.display === "none") return;  // ne compte pas les lignes filtrées
+  const group = tr.querySelector(".gaz-group");
+  if (!group) return;
+
+  const btns = group.querySelectorAll(".gaz-btn");
+  if (btns.length >= 2) {
+    const m3Text = btns[1].textContent.replace(/[^\d.]/g, "");
+    const kwhText = btns[0].textContent.replace(/[^\d.]/g, "");
+    const m3 = parseFloat(m3Text);
+    const kwh = parseFloat(kwhText);
+    if (isFinite(m3)) totalM3 += m3;
+    if (isFinite(kwh)) totalKwh += kwh;
+  }
+});
+
+
+  totalM3Span.textContent = `m³ total: ${totalM3.toFixed(1)}`;
+  totalKwhSpan.textContent = `kWh total: ${Math.round(totalKwh).toLocaleString("fr-FR")}`;
+}
+
+
+function updateHistoriqueTotals() {
+
+  console.log("Historique durations:", historiqueDurations);
+
+const total = Object.values(historiqueDurations)
+  .filter(Number.isFinite)
+  .reduce((sum, val) => sum + val, 0);
+
+
+  let btn = document.getElementById("historiqueSumBtn");
+
+  if (total === 0) {
+    if (btn) btn.remove();
+    return;
+  }
+
+if (!btn) {
+  btn = document.createElement("button");
+  btn.id = "historiqueSumBtn";
+  btn.className = "gaz-total";   // 👈 même classe que Σ m3
+  btn.style.marginLeft = "10px";
+
+  const controls = document.querySelector(".controls");
+  controls.appendChild(btn);
+}
+
+
+  const H = String(Math.floor(total / 60)).padStart(2,"0");
+  const M = String(total % 60).padStart(2,"0");
+
+  btn.textContent = `⏱ ${H}:${M}`;
+
+let exportBtn = document.getElementById("historiqueExportBtn");
+
+if (!exportBtn) {
+  exportBtn = document.createElement("button");
+  exportBtn.id = "historiqueExportBtn";
+  exportBtn.className = "gaz-total";
+  exportBtn.style.marginLeft = "10px";
+  exportBtn.textContent = "Export Excel";
+
+  exportBtn.onclick = exportHistoriqueExcel;
+
+  const controls = document.querySelector(".controls");
+  controls.appendChild(exportBtn);
+}
+
+}
+
+function exportHistoriqueExcel() {
+
+  const data = Object.entries(historiqueDurations)
+    .map(([fileName, minutes]) => {
+
+      // Extraction date depuis Z3xxxxx_YYYYMMDD.csv
+      const match = fileName.match(/_(\d{8})/);
+
+      let formattedDate = "Date inconnue";
+
+      if (match) {
+        const raw = match[1]; // YYYYMMDD
+        const year  = raw.substring(0,4);
+        const month = raw.substring(4,6);
+        const day   = raw.substring(6,8);
+
+        formattedDate = `${day}/${month}/${year}`;
+      }
+
+      const H = Math.floor(minutes / 60);
+      const M = minutes % 60;
+
+      return {
+        "Date": formattedDate,
+        "Durée (minutes)": minutes,
+        "Durée (HH:MM)": 
+          String(H).padStart(2,"0") + ":" +
+          String(M).padStart(2,"0")
+      };
+    });
+
+  if (!data.length) return;
+
+  // Tri par date croissante
+  data.sort((a,b)=>{
+    const [d1,m1,y1] = a.Date.split("/");
+    const [d2,m2,y2] = b.Date.split("/");
+    return new Date(y1,m1-1,d1) - new Date(y2,m2-1,d2);
+  });
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Historique");
+
+  XLSX.writeFile(workbook, "Historique_Cycles.xlsx");
+}
+
+
+
+  
+// === Limiteur de concurrence (évite 200 fetch en même temps) ===
+async function runWithConcurrency(tasks, limit, worker) {
+  let i = 0;
+  const executing = new Set();
+
+  async function enqueue() {
+    if (i >= tasks.length) return;
+    const task = tasks[i++];
+
+    const p = (async () => worker(task))()
+      .catch(err => console.warn("[GAZ] task failed:", err))
+      .finally(() => executing.delete(p));
+
+    executing.add(p);
+
+    if (executing.size >= limit) {
+      await Promise.race(executing);
+    }
+    await enqueue();
+  }
+
+  await enqueue();
+  await Promise.all([...executing]);
+}
+
+
+
+// =========================================
+// === Calcule durée cycle Historique (Z3)
+// =========================================
+async function computeHistoriqueForRow({ f, tdAction }) {
+
+  startScan();
+
+  try {
+
+    const realId = getDriveFileId(f);
+    const res = await fetch(
+      `https://smes21540.netlify.app/.netlify/functions/drive?id=${realId}&name=${encodeURIComponent(f.name)}&site=Smes_Acces`
+    );
+
+    if (!res.ok) return;
+
+    const text = await res.text();
+    const lines = text.split(/\r?\n/).filter(l => l.trim() !== "");
+
+    let totalMinutes = 0;
+
+// ===== Parseur CSV robuste =====
+function parseCSV(line) {
+  const result = [];
+  let current = "";
+  let insideQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+
+    if (c === '"' && line[i + 1] === '"') {
+      current += '"';
+      i++;
+    }
+    else if (c === '"') {
+      insideQuotes = !insideQuotes;
+    }
+    else if (c === "," && !insideQuotes) {
+      result.push(current);
+      current = "";
+    }
+    else {
+      current += c;
+    }
+  }
+
+  result.push(current);
+  return result;
+}
+
+// ===== Lecture des lignes Z3 =====
+for (const line of lines.slice(3)) {
+
+  const cols = parseCSV(line);
+  if (!cols || cols.length < 5) continue;
+
+  const message = cols[2].trim();
+
+
+const lower = message.toLowerCase();
+
+if (
+  lower.includes("marrage cycle") &&
+  lower.includes("chage avec br")
+)
+ {
+
+    const startTime = cols[1].trim();
+    const endTime   = cols[4].trim();
+
+    if (!endTime) continue;
+
+    const [h1,m1,s1] = startTime.split(":").map(Number);
+    const [h2,m2,s2] = endTime.split(":").map(Number);
+
+    let seconds =
+      (h2*3600 + m2*60 + s2) -
+      (h1*3600 + m1*60 + s1);
+
+    if (seconds < 0) seconds += 24*3600;
+
+    totalMinutes += Math.floor(seconds / 60);
+  }
+}
+
+
+const btn = tdAction.querySelector(".gaz-btn");
+if (!btn) return;
+
+// 👉 Si aucun cycle trouvé → on masque le bouton
+if (totalMinutes === 0) {
+  btn.remove();
+  return;
+}
+
+// 👉 On stocke la durée pour le total global
+if (Number.isFinite(totalMinutes) && totalMinutes > 0) {
+  historiqueDurations[f.id] = totalMinutes;
+
+}
+
+
+
+const H = String(Math.floor(totalMinutes / 60)).padStart(2,"0");
+const M = String(totalMinutes % 60).padStart(2,"0");
+
+btn.textContent = `⏱ ${H}:${M}`;
+btn.disabled = false;
+
+btn.style.background = "linear-gradient(180deg, #bbdefb, #64b5f6)";
+btn.style.color = "#0d47a1";
+btn.style.minWidth = "120px";
+
+
+  } catch(e) {
+    console.warn("Erreur calcul Historique :", f.name);
+} finally {
+  endScan();
+}
+
+}
+
+
+
+  
+
+// ✅ évite le crash si #yearSelect n'existe plus
+function initYearSelect(){
+  const ys = document.getElementById("yearSelect");
+  if(!ys) return;
+  // Si tu réintroduis un select un jour, tu mettras ici son initialisation.
+}
+
+const ys = document.getElementById("yearSelect");
+if (ys) ys.value = "";
+
+
+
+function showTable(){
+  const tw = document.getElementById("tableWrapper");
+  if (tw) tw.style.display = "block";
+}
+
+function hideTable(){
+  const tw = document.getElementById("tableWrapper");
+  if (tw) tw.style.display = "none";
+}
+
+function showSiteTiles(){
+  const tiles = document.getElementById("siteTiles");
+  if (tiles) tiles.style.display = "grid";
+  hideTable(); // ✅ cache le tableau → plus de colonnes vides visibles
+}
+
+function hideSiteTiles(){
+  const tiles = document.getElementById("siteTiles");
+  if (tiles) tiles.style.display = "none";
+  showTable(); // ✅ on remet le tableau dès qu'on sort des tuiles
+}
+
+
+function renderRootTiles(folders){
+  const tiles = document.getElementById("siteTiles");
+  if (!tiles) return;
+
+  tiles.innerHTML = "";
+
+  // ✅ S’il n’y a aucun dossier racine → on ne montre pas les tuiles (comme avant)
+  if (!folders || folders.length === 0){
+    hideSiteTiles();
+    return;
+  }
+
+  folders.forEach(f => {
+    const div = document.createElement("div");
+    div.className = "site-tile";
+const icon = getFolderIcon(f.name);
+
+div.innerHTML = `
+  <div class="icon">${icon}</div>
+  <div class="label">${f.name}</div>
+`;
+
+
+div.onclick = async () => {
+  const realId = getDriveFolderId(f); // ✅ ID réel (dossier cible si shortcut)
+  await openSiteAndShowTiles(realId, f.name);
+
+  const li = document.querySelector(`#folderTree > li[data-id="${realId}"]`);
+  if (li) {
+    document.querySelectorAll('#folderTree li span.folder-name')
+      .forEach(s => s.classList.remove('active-folder'));
+    const nameSpan = li.querySelector('span.folder-name');
+    if (nameSpan) nameSpan.classList.add('active-folder');
+    li.scrollIntoView({block:"center"});
+  }
+};
+
+
+
+    tiles.appendChild(div);
+  });
+
+  showSiteTiles();
+}
+
+async function renderSiteSubfolderTiles(siteId, siteName="") {
+  const tiles = document.getElementById("siteTiles");
+  if (!tiles) return;
+
+  // charge la liste des dossiers du site
+  const files = await fetchFolderContents(siteId);
+const folders = (files || [])
+  .filter(isDriveFolderOrShortcutFolder)
+
+    .sort((a,b) => a.name.localeCompare(b.name, 'fr', { sensitivity:'base' }));
+
+  tiles.innerHTML = "";
+
+  // Si pas de sous-dossiers -> afficher directement les fichiers du site
+  if (!folders.length){
+    hideSiteTiles();
+
+    // mémorise le dossier courant comme "dernier dossier"
+    localStorage.setItem('lastFolderId', siteId);
+    localStorage.setItem("lastFolderPath", siteName || "");
+
+    const files2 = await fetchFolderContents(siteId);
+    const filtered = (files2 || []).filter(x =>
+      /\.(csv|jpg|jpeg|png|gif|webp|json|pdf|mp4|webm|mov|m4v|avi|ppsx|pptx)$/i.test(x.name)
+    );
+
+    // preview : inclure images + pdf + vidéos
+    previewFiles = filtered.filter(x =>
+      /\.(jpg|jpeg|png|gif|webp|pdf|mp4|webm|mov|m4v)$/i.test(x.name)
+    );
+
+    displayFiles(filtered, siteName || "");
+    return;
+  }
+
+
+  // petit titre au-dessus des tuiles (optionnel mais pratique)
+  const head = document.createElement("div");
+  head.style.gridColumn = "1 / -1";
+  head.style.fontWeight = "900";
+  head.style.color = "var(--accent-darker)";
+  head.style.margin = "4px 2px 10px";
+  head.textContent = siteName ? `${siteName} — Choisissez le sous dossier` : "📍 Dossiers";
+  tiles.appendChild(head);
+
+  folders.forEach(f => {
+    const div = document.createElement("div");
+    div.className = "site-tile";
+const icon = getFolderIcon(f.name);
+
+div.innerHTML = `
+  <div class="icon">${icon}</div>
+  <div class="label">${f.name}</div>
+`;
+
+
+applyFolderTooltip(div, f.name);
+
+
+    
+    div.onclick = async () => {
+      // on quitte le mode tuiles
+      hideSiteTiles();
+
+      // on essaye de retrouver le LI déjà créé par toggleFolder
+const realId = getDriveFolderId(f);
+
+const childLi = document.querySelector(`#folderTree li[data-id="${realId}"]`);
+if (childLi) {
+  await loadFolderFilesOnClick(childLi, null);
+  childLi.scrollIntoView({block:"center"});
+} else {
+// fallback sécurisé : on force passage par la vraie fonction centrale
+const li = document.querySelector(`#folderTree li[data-id="${realId}"]`);
+
+if (li) {
+  await loadFolderFilesOnClick(li, null);
+} else {
+  console.warn("[TILES] Impossible de trouver le dossier dans l'arborescence :", f.name);
+}
+
+}
+
+    };
+
+    tiles.appendChild(div);
+  });
+
+  showSiteTiles();
+}
+
+
+// Clique sur un site (tile ou sidebar) → ouvre l'arbre + affiche les sous-dossiers en tuiles
+async function openSiteAndShowTiles(siteId, siteName="") {
+  const controls = document.querySelector(".controls");
+  if (controls) controls.style.display = "flex";
+
+  await refreshCampaignUIForSite(siteId);
+
+  const li = document.querySelector(`#folderTree > li[data-id="${siteId}"]`);
+  if (li) await expandFolder(li);   // ✅ au lieu de toggleFolder(li)
+
+  await renderSiteSubfolderTiles(siteId, siteName);
+}
+
+
+
+  
+
+/* ----------- Init ----------- */
+window.onload=()=>{
+  updateNetworkStatus();
+  const savedTheme=localStorage.getItem("selectedTheme")||"orange";
+  setTheme(savedTheme);
+
+  // bouton "Télécharger le dossier" caché par défaut tant qu'aucun contenu
+  document.getElementById("downloadFolderBtn").style.display="none";
+
+// ✅ Filtre automatique : du 01/04/2026 à aujourd’hui
+const today = new Date();
+const yyyy = today.getFullYear();
+const mm = String(today.getMonth() + 1).padStart(2, "0");
+const dd = String(today.getDate()).padStart(2, "0");
+
+filterStartDate = "2026-04-01";
+filterEndDate = `${yyyy}-${mm}-${dd}`;
+
+loadRootFolders();
+hideTable();
+
+initDatePickers();
+
+// ✅ Affichage visuel dans les calendriers
+setTimeout(() => {
+  fpStart?.setDate(filterStartDate, false);
+  fpEnd?.setDate(filterEndDate, false);
+
+  document.querySelectorAll(".date-field")
+    .forEach(df => df.classList.add("has-date"));
+}, 100);
+
+initYearSelect();
+const last = localStorage.getItem("lastFolderId");
+if (last) {
+  // attendre un peu que l'arborescence soit rendue
+  setTimeout(() => {
+    const li = document.querySelector(`#folderTree li[data-id="${last}"]`);
+    if (li) {
+      loadFolderFilesOnClick(li);
+    } else {
+      console.warn("[INIT] Impossible de retrouver le dernier dossier ouvert :", last);
+    }
+  }, 1200);
+}
+
+};
+
+
+  
+
+</script>
+
+<!-- === Fonction de nettoyage du cache === -->
+<script>
+function clearBrowserCache() {
+  if (confirm('🧽 Vider le cache local du navigateur ?')) {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          for (let name of names) caches.delete(name);
+        });
+      }
+
+      alert('✅ Cache local vidé.\nLa page va être rechargée.');
+      location.reload(true);
+    } catch (err) {
+      console.error('Erreur pendant le nettoyage du cache :', err);
+      alert('Erreur pendant le nettoyage du cache.');
+    }
+  }
+}
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
