@@ -1,0 +1,1751 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Plan</title>
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌽</text></svg>">
+  
+<!-- ✅ Police compatible accents (latin-ext) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap&subset=latin-ext" rel="stylesheet">
+
+
+<style>
+:root{
+  /* Thème (identique viewer02) */
+  --bg:#fff5f5; --panel:#ffffff; --accent:#ff7043; --accent-darker:#e64a19;
+  --accent-muted:#ffccbc; --danger:#d84315; --text:#333;
+
+--text-light: #fff;
+--text-dark: #222;
+
+  
+  /* Grille logique */
+  --cols: 22;
+  --rows-top: 6;
+  --rows-bot: 6;
+  --split-gap: 0.3;          /* espace vertical entre les 2 sous-grilles (en fraction de case) */
+
+  /* Cellules */
+  --tile-size: 110px;        /* sera recalculé en JS */
+  --cell-gap: 8px;
+
+  /* Sidebar temporelle (en dessous) */
+  --timebar-cols: 6;         /* largeur = 6 cases */
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",
+               Arial,"Noto Sans","Liberation Sans","DejaVu Sans",sans-serif;
+  background:var(--bg); color:var(--text);
+  min-height:100vh; display:flex; flex-direction:column;
+}
+
+
+/* ===== Header (style viewer02) ===== */
+.header{
+  position:relative; display:flex; align-items:center; justify-content:center;
+  min-height:60px; padding:10px 16px 0;
+}
+.header .logo{height:50px;width:auto;}
+#currentFolderName{
+  position:absolute; left:16px; top:8px; font-size:22px; font-weight:bold; color:var(--accent);
+  max-width:45vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+#fileNameContainer{position:absolute; right:16px; top:8px; text-align:right;}
+#fileName{font-size:18px; font-weight:bold; color:var(--accent-darker); max-width:40vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+#lineCount{font-size:12px; color:var(--accent-darker); margin-top:2px;}
+.flame{display:inline-block; animation:flicker 1s infinite alternate;}
+@keyframes flicker{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+
+/* ===== Titre date/heure ===== */
+#datetimeLabel {
+  font-weight: bold;
+  font-size: 18px;
+  text-align: center;
+  color: var(--danger);
+  margin: 10px auto 20px; /* ⬅️ augmenté pour espacer avant les tuiles */
+}
+
+/* ===== PAGE LAYOUT : main (3/4) + side (1/4) ===== */
+#pageWrap{
+  flex:1;
+  display:flex;
+  gap:10px;
+  padding:10px 12px;
+  overflow:hidden;
+  align-items:flex-start;   /* ✅ évite que la grille force le scroll vertical */
+  max-height:calc(100vh - 120px); /* ✅ limite le tout dans la fenêtre */
+}
+
+
+/* ===== Zone centrale : deux sous-grilles 22×6 centrées ===== */
+#mainCol{
+  flex:3; min-width:0;
+  display:flex; flex-direction:column;
+  overflow:hidden;
+  background: transparent;
+  min-height:70vh; /* ✅ assure un espace suffisant pour la grille */
+}
+
+#gridWrap{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;  /* ✅ pas de scrollbar dans la zone tuiles */
+}
+
+#grid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--tile-size) * var(--split-gap));
+  margin-bottom: 16px; /* ⬅️ espace après la grille complète */
+}
+
+
+/* Sous-grilles 22 colonnes chacune */
+.grid-part{
+  display:grid;
+  grid-template-columns: repeat(var(--cols), var(--tile-size));
+  grid-auto-rows: var(--tile-size);
+  gap: var(--cell-gap);
+}
+
+/* Cellules “sonde” */
+.sonde{
+  width: var(--tile-size); height: var(--tile-size);
+  background: var(--panel); border-radius: 10px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  box-shadow:0 2px 5px rgba(0,0,0,0.2); padding:6px;
+  overflow:hidden;
+}
+.sonde .label{ font-size: clamp(9px, calc(var(--tile-size)*0.11), 13px); font-weight:bold; color:#000; margin-bottom:2px; }
+.sonde .consigne{ font-size: clamp(8px, calc(var(--tile-size)*0.09), 11px); color:#555; font-style:italic; }
+.sonde .val{ font-size: clamp(13px, calc(var(--tile-size)*0.16), 20px); font-weight:bold; color:#000; }
+
+
+/* ===== Cases spéciales ===== */
+.sonde.special {
+  outline: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;   /* centre verticalement */
+  text-align: center;        /* centre horizontalement */
+  padding: 0;                /* enlève les décalages internes */
+}
+
+/* ===== Sidebar temporelle (en dessous de la grille) ===== */
+#bottomBar {
+  display: flex;
+  flex-direction: column; /* ⬅️ les éléments passent en colonne */
+  align-items: center;
+  justify-content: center;
+  gap: 12px; /* ⬅️ espace vertical entre le slider et le scaleBox */
+  padding: 10px 0 14px;
+}
+
+
+#timeBar{
+  width: calc(var(--timebar-cols) * var(--tile-size) + (var(--timebar-cols) - 1) * var(--cell-gap));
+  display:flex; align-items:center; justify-content:center;
+}
+#slider{ width:100%; height: calc(var(--tile-size) * 0.35); }
+
+/* 🎯 Boutons ⏮️ et ⏭️ : icônes simples sans contour */
+#timeBar button {
+  background: none;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  color: var(--accent-darker);
+  font-size: 26px;
+  cursor: pointer;
+  padding: 4px 6px;
+  transition: transform 0.1s ease, color 0.2s ease;
+}
+
+/* Survol : légère mise en avant */
+#timeBar button:hover {
+  transform: scale(1.2);
+  color: var(--accent);
+}
+
+/* Désactivé : gris clair, non cliquable */
+#timeBar button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ▶️ Bouton lecture automatique */
+#btnPlay {
+  background: none;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  color: var(--accent-darker);
+  font-size: 26px;
+  cursor: pointer;
+  padding: 4px 6px;
+  transition: transform 0.1s ease, color 0.2s ease;
+}
+
+#btnPlay:hover {
+  transform: scale(1.2);
+  color: var(--accent);
+}
+
+#btnPlay.active {
+  color: var(--accent);
+  transform: scale(1.1);
+  text-shadow: 0 0 6px var(--accent-muted);
+}
+
+
+
+
+  
+#scaleBox {
+  background: var(--panel);
+  border: 1px solid var(--accent-muted);
+  border-radius: 10px;
+  padding: 12px 16px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+  font-size: 13px;
+  color: var(--text);
+  text-align: center;
+  min-width: 280px;
+}
+#scaleBox input {
+  width: 70px;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  text-align: right;
+}
+
+
+/* Scrollbars (grille) */
+#gridWrap::-webkit-scrollbar{height:10px;width:10px;}
+#gridWrap::-webkit-scrollbar-thumb{background:var(--accent);border-radius:10px;}
+#gridWrap::-webkit-scrollbar-track{background:#eee;}
+
+/* ===== Événements Z3 (volet élargi + scrollbar + nuance centrée) ===== */
+#sideCol {
+  flex: 0 1 auto;             /* largeur s’adapte au contenu */
+  min-width: 360px;
+  max-width: 600px;           /* largeur max pour les longs textes */
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  max-height: calc(100vh - 160px);
+  overflow: hidden;
+  align-self: flex-start;
+  margin-bottom: 10px;
+}
+
+
+#sideHeader {
+  font-weight: 600;
+  font-size: 15px;
+  padding: 10px;
+  background: var(--accent);
+  color: #fff;
+  text-align: center;
+  border-bottom: 2px solid var(--accent-darker);
+}
+
+#z3List {
+  flex: 1;
+  overflow-y: auto; /* ✅ scroll si trop d’événements */
+  background: var(--panel);
+  padding: 8px 10px;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+/* Items */
+.z3Item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.25s, color 0.25s, transform 0.15s;
+}
+.z3Item .t {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--accent-darker);
+  min-width: 52px;
+}
+.z3Item .d {
+  flex: 1;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+
+
+/* Dégradé centré sur l’événement (0 → 4) + texte adaptatif */
+.z3Item[data-intensity="0"],
+.hour-mark[data-intensity="0"] {
+  background-color: color-mix(in srgb, var(--accent) 5%, var(--panel));
+  color: var(--text-dark);
+}
+
+.z3Item[data-intensity="1"],
+.hour-mark[data-intensity="1"],
+.z3Item[data-intensity="2"],
+.hour-mark[data-intensity="2"],
+.z3Item[data-intensity="3"],
+.hour-mark[data-intensity="3"],
+.z3Item[data-intensity="4"],
+.hour-mark[data-intensity="4"] {
+  /* dès qu’il y a de la couleur, texte blanc */
+  color: var(--text-light);
+}
+
+.z3Item[data-intensity="1"],
+.hour-mark[data-intensity="1"] {
+  background-color: color-mix(in srgb, var(--accent) 25%, var(--panel));
+}
+
+.z3Item[data-intensity="2"],
+.hour-mark[data-intensity="2"] {
+  background-color: color-mix(in srgb, var(--accent) 45%, var(--panel));
+}
+
+.z3Item[data-intensity="3"],
+.hour-mark[data-intensity="3"] {
+  background-color: color-mix(in srgb, var(--accent) 65%, var(--panel));
+}
+
+.z3Item[data-intensity="4"],
+.hour-mark[data-intensity="4"] {
+  background-color: var(--accent-darker);
+  transform: scale(1.02);
+}
+
+
+
+/* Lissage des transitions de couleur et lisibilité */
+.z3Item {
+  transition: background-color 0.4s ease, color 0.3s ease, transform 0.15s ease;
+}
+
+/* Lignes horaires (repères visuels) */
+.hour-mark {
+  opacity: 0.6;
+  font-style: italic;
+  background: var(--panel);
+  color: var(--accent-darker);
+  cursor: default;
+}
+
+
+/* Événement sélectionné */
+.z3Item.active {
+  outline: 2px solid var(--accent);
+  background: var(--accent-muted);
+  color: var(--accent-darker);
+}
+
+/* Scrollbar esthétique */
+#z3List::-webkit-scrollbar { width: 8px; }
+#z3List::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 6px; }
+#z3List::-webkit-scrollbar-track { background: var(--accent-muted); }
+
+
+
+/* collapsed state (rail) */
+#sideCol.collapsed{
+  min-width: 46px; max-width: 46px;
+}
+#sideCol.collapsed #sideHeader h3,
+#sideCol.collapsed .sideSection { display:none; }
+#sideCol.collapsed #toggleSide{ width:100%; border-radius:8px; }
+
+/* small hint button floating (optional, not needed since header has toggle) */
+#floatOpen{
+  position:absolute; left:-8px; top:12px;
+  transform: translateX(-100%);
+  background: var(--accent); color:#fff; border:none; border-radius:14px;
+  padding:6px 8px; cursor:pointer; display:none;
+}
+#floatOpen:hover{ background: var(--accent-darker); }
+
+/* 🔧 Correctif final : texte blanc dès qu’une intensité colore la case */
+.z3Item[data-intensity]:not([data-intensity="0"]),
+.hour-mark[data-intensity]:not([data-intensity="0"]) {
+  color: var(--text-light) !important;
+}
+
+.z3Item[data-intensity]:not([data-intensity="0"]) .t,
+.z3Item[data-intensity]:not([data-intensity="0"]) .d,
+.hour-mark[data-intensity]:not([data-intensity="0"]) .t,
+.hour-mark[data-intensity]:not([data-intensity="0"]) .d {
+  color: var(--text-light) !important;
+}
+
+/* Et un petit contraste pour le texte neutre (intensité 0) */
+.z3Item[data-intensity="0"] .t,
+.z3Item[data-intensity="0"] .d,
+.hour-mark[data-intensity="0"] .t,
+.hour-mark[data-intensity="0"] .d {
+  color: var(--text-dark) !important;
+}
+
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 10px var(--accent); }
+  100% { box-shadow: none; }
+}
+#timeBar.pulse {
+  animation: pulse 0.5s ease-out;
+}
+
+
+  
+  
+</style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<div class="header">
+  <div id="currentFolderName"></div>
+  <img src="img/logo.png" class="logo" alt="Logo"/>
+  <div id="fileNameContainer">
+    <div id="fileName"></div>
+    <div id="lineCount"></div>
+  </div>
+</div>
+
+<div id="datetimeLabel">-- / -- / ---- — --:--</div>
+
+<!-- ===== PAGE WRAP (main + side) ===== -->
+<div id="pageWrap">
+
+  <!-- ===== MAIN (inchangé dans l’esprit) ===== -->
+  <div id="mainCol">
+    <div id="gridWrap">
+      <div id="grid">
+        <div id="gridTop" class="grid-part"></div>
+        <div id="gridBottom" class="grid-part"></div>
+      </div>
+    </div>
+
+    <!-- ===== Sidebar temporelle + min/max ===== -->
+<div id="bottomBar">
+<div id="timeBar">
+<button id="btnPrevDay" title="Charger le jour précédent">⏮️</button>
+<input type="range" id="slider" min="0" max="0" value="0"/>
+<button id="btnNextDay" title="Charger le jour suivant">⏭️</button>
+<button id="btnPlay" title="Mode lecture automatique">▶️</button>
+
+</div>
+
+<!-- ✅ Indicateur optionnel des jours visibles -->
+<div id="loadedDaysLabel" style="text-align:center; font-size:12px; color:var(--accent-darker);"></div>
+
+<div id="scaleBoxWrap">
+  <div id="scaleBox" title="Réglage de l’échelle de couleur">
+    <div style="font-weight:600; color:var(--accent-darker); margin-bottom:4px;">
+      Échelle de température (°C)
+    </div>
+    <div style="display:flex; align-items:center; justify-content:center; gap:10px;">
+      <label for="minInput">Min :</label>
+      <input type="number" id="minInput" step="0.1" value="30"/>
+      <label for="maxInput">Max :</label>
+      <input type="number" id="maxInput" step="0.1" value="60"/>
+    </div>
+  </div>
+</div>
+
+</div>
+
+  </div>
+
+  <!-- ===== SIDE (Z3 EVENTS) ===== -->
+<aside id="sideCol">
+  <div id="sideHeader">🧰 Evenements</div>
+  <div id="z3List"></div>
+</aside>
+
+
+    
+</div>
+
+<script src="libs/papaparse.min.js"></script>
+<script>
+
+
+
+
+/* =================== Globals =================== */
+let csvData=[], headers=[], planTop=[], planBottom=[];
+let z3Events = [];         // {timeText, minutes, desc, fileId, fileName}
+let lastSliderIndex = 0;
+let currentDay = null;
+let isMerging = false;
+let mergedDays = new Set();
+const Z3_HILITE_TOL_MIN = 5;  // tolérance (minutes) pour surlignage
+const params=new URLSearchParams(window.location.search);
+const fileId=params.get("fileId");
+const fileName=params.get("fileName");
+
+/* =================== Header dossier + flamme =================== */
+(function hydrateFolderHeader() {
+  // 🔹 On récupère d’abord le chemin complet transmis par index.html
+  const urlParams = new URLSearchParams(window.location.search);
+  let title =
+    urlParams.get("folderPath") ||
+    localStorage.getItem("currentFolderPath") ||
+    localStorage.getItem("lastFolderPath") ||
+    localStorage.getItem("chemin") ||
+    localStorage.getItem("dossier") ||
+    "";
+
+  // 🔸 Si rien trouvé → tentative via csvFilesList (fallback)
+  if (!title) {
+    try {
+      const list = JSON.parse(localStorage.getItem("csvFilesList") || "[]");
+      const f = list.find(x => x.id === fileId);
+      if (f && f.folder) title = f.folder;
+    } catch (e) {
+      console.warn("Erreur lecture dossier parent :", e);
+    }
+  }
+
+  // 🔥 Conversion flammes animées
+  const flameTitle = title
+    ? title.replace(/🔥/g, '<span class="flame" title="Brûleur(s) en fonctionnement">🔥</span>')
+    : "";
+
+  // Gauche → dossier / chemin complet
+  const el = document.getElementById("currentFolderName");
+  if (el) el.innerHTML = flameTitle;
+
+  // Droite → nom du fichier seul
+  const fn = document.getElementById("fileName");
+  if (fn) fn.textContent = decodeURIComponent(fileName || "");
+  // 🔹 Met à jour le titre de l’onglet navigateur (nom du dossier uniquement)
+  if (title) {
+    document.title = `Plan – ${title}`;
+  }
+
+  
+})();
+
+
+
+/* =================== Plan depuis localStorage =================== */
+function loadPlan(){
+  const raw=localStorage.getItem("planSondes");
+  if(!raw){
+    document.getElementById("gridTop").innerHTML="<b style='color:red'>❌ planSondes manquant</b>";
+    return;
+  }
+  const lines = raw.trim().split(/\r?\n/).map(l=>{
+    const cols = l.split(",").map(v=>v.trim());
+    return cols.every(v=>v==="") ? null : cols;
+  });
+
+  // scinder en deux blocs (ligne vide = séparation)
+  let top=[], bottom=[], buf=[];
+  let topDone=false;
+  for(const row of lines){
+    if(row===null){ if(!topDone){ top = buf; topDone=true; buf=[]; } else { /* ignore extra splits */ } }
+    else buf.push(row);
+  }
+  bottom = topDone ? buf : [];
+
+  planTop = top;
+  planBottom = bottom;
+
+  buildGrid();
+}
+
+/* =================== Construction de la grille centrée =================== */
+function buildGrid(){
+  const gridTop = document.getElementById("gridTop");
+  const gridBottom = document.getElementById("gridBottom");
+  gridTop.innerHTML = ""; 
+  gridBottom.innerHTML = "";
+
+  const cols = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cols')) || 22;
+
+  function placeRows(container, rows){
+    if(!rows || !rows.length) return;
+    const planCols = rows[0].length;
+    const startCol = Math.max(1, Math.floor((cols - planCols)/2) + 1); // centre dans 22
+    rows.forEach(r=>{
+      r.forEach((num, j)=>{
+        if(!num) return;
+        const d=document.createElement("div");
+        d.className="sonde";
+        d.id="sonde"+num;
+        d.style.gridColumn = (startCol + j) + " / span 1";
+        d.innerHTML = `
+          <div class="label">Sonde ${num}</div>
+          <div class="consigne">-- °C</div>
+          <div class="val">-- °C</div>`;
+        container.appendChild(d);
+      });
+    });
+  }
+
+  placeRows(gridTop, planTop);
+  placeRows(gridBottom, planBottom);
+} // 🔹 Fin de buildGrid()
+
+/* ============ RIGHT PANEL: load + render Z3 (auto-fetch if missing content) ============ */
+function yyyymmddFromName(name){
+  const m = (name||"").match(/(\d{8})/);
+  return m ? m[1] : null;
+}
+
+function toMinutes(t){
+  if(!t) return NaN;
+  const m = String(t).trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if(!m) return NaN;
+  const hh = parseInt(m[1],10), mm = parseInt(m[2],10), ss = parseInt(m[3]||"0",10);
+  return hh*60 + mm + (ss>=30? 0.5:0);
+}
+
+function minutesFromRowTime(row){
+  const timeKey=headers.find(h=>{
+    const a=(h||"").toLowerCase();
+    return a.includes("heure")||a.includes("time")||a==="h";
+  });
+  const t = timeKey ? String(row[timeKey]||"").trim() : "";
+  return toMinutes(t);
+}
+
+function currentRowMinutes(idx){
+  if(!csvData[idx]) return NaN;
+  return minutesFromRowTime(csvData[idx]);
+}
+
+/* =====================================================
+   🔁 Synchronisation automatique des fichiers Z3
+   - Vérifie que le cache est chargé depuis index.html
+   - Recharge si besoin à partir du dossier "Historique"
+   ===================================================== */
+async function ensureZ3FilesLoaded() {
+  const cached = JSON.parse(localStorage.getItem("csvZ3Files") || "[]");
+  if (cached.length) {
+    console.log(`📦 ${cached.length} fichiers Z3 déjà présents dans le cache`);
+    return cached;
+  }
+
+  console.warn("⚠️ Aucun Z3 préchargé trouvé, tentative de rechargement…");
+
+  try {
+    const list = JSON.parse(localStorage.getItem("csvFilesList") || "[]");
+    const first = list.find(
+      f => f.name &&
+      (f.name.toLowerCase().includes("traça_temp") || f.name.toLowerCase().includes("traca_temp"))
+    );
+    if (!first) throw new Error("Pas de dossier Traça_Temp détecté");
+
+    const parentFolder = first.folder.split('/').slice(0, -1).join('/');
+    const historiqueFolder = `${parentFolder}/Historique`;
+
+    const res = await fetch(`/api/list?path=${encodeURIComponent(historiqueFolder)}`);
+    if (!res.ok) throw new Error("Erreur de lecture API");
+    const files = await res.json();
+
+    const z3Files = files
+      .filter(f => f.name.startsWith("Z3") && f.name.endsWith(".csv"))
+      .map(f => ({
+        name: f.name,
+        path: `${historiqueFolder}/${f.name}`,
+        folder: historiqueFolder
+      }));
+
+    localStorage.setItem("csvZ3Files", JSON.stringify(z3Files));
+    console.log(`✅ ${z3Files.length} fichiers Z3 rechargés depuis "${historiqueFolder}"`);
+    return z3Files;
+  } catch (err) {
+    console.error("❌ Impossible de recharger les fichiers Z3 :", err);
+    return [];
+  }
+}
+
+  
+// =====================================================
+// ✅ Version identique à viewer02 — complète et robuste
+// =====================================================
+// =====================================================
+// ✅ Version identique à viewer02 — complète et robuste
+// =====================================================
+async function loadZ3ForSameDay() {
+  z3Events = [];
+
+  const dayMatch = (fileName || "").match(/(\d{8})/);
+  const day = dayMatch ? dayMatch[1] : null;
+  if (!day) {
+    console.warn("⚠️ Impossible de détecter la date du fichier principal :", fileName);
+    renderZ3List();
+    return;
+  }
+
+  // 🔹 Récupération ou rechargement des fichiers Z3
+  const z3Files = await ensureZ3FilesLoaded();
+  const sameDay = z3Files.filter(f => f.name.includes(day));
+  console.log(`🔍 Recherche Z3 du ${day} → ${sameDay.length} fichier(s) trouvé(s)`);
+
+  for (const f of sameDay) {
+    let text = f.content;
+
+    // 🔸 Si pas de contenu, téléchargement via proxy Drive (identique viewer02)
+    if (!text && f.id) {
+      try {
+        console.log("🌐 Téléchargement Z3 depuis Drive :", f.name);
+        const url = `https://smes21540.netlify.app/.netlify/functions/drive?id=${f.id}&name=${encodeURIComponent(f.name || "")}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Erreur proxy Drive");
+        const buf = await res.arrayBuffer();
+        text = decodeSmart(buf); // même décodage que CSV principal
+
+        f.content = text;
+        const all = JSON.parse(localStorage.getItem("csvZ3Files") || "[]");
+        const updated = all.map(x => x.name === f.name ? f : x);
+        localStorage.setItem("csvZ3Files", JSON.stringify(updated));
+      } catch (err) {
+        console.error("❌ Erreur chargement fichier Z3 :", f.name, err);
+        continue;
+      }
+    }
+
+    if (!text) continue;
+
+    // 🧹 Nettoyage et parsing CSV
+    const lines = text.split(/\r?\n/).filter(l => l.trim() !== "");
+    let startIndex = lines.findIndex(l => /trigger.?time|horodatage/i.test(l));
+    if (startIndex === -1) startIndex = 0;
+    const csvClean = lines.slice(startIndex).join("\n");
+
+    const parsed = Papa.parse(csvClean, {
+      header: true,
+      skipEmptyLines: true,
+      dynamicTyping: false,
+      delimitersToGuess: [",", ";", "\t"],
+    });
+
+    const H = parsed.meta.fields || [];
+    const rows = parsed.data || [];
+
+    // 🔍 Détection des colonnes (FR / EN / variantes)
+    const timeCol = H.find(h => /(trigger.?time|heure|horodatage|time|temps)/i.test(h)) || H[0];
+    const msgCol  = H.find(h => /(message|desc|description|evenement|event)/i.test(h)) || H[1];
+    const addrCol = H.find(h => /(address|adresse|addr|zone|address ?1)/i.test(h)) || null;
+
+    console.log("🧩 Colonnes Z3 détectées :", { timeCol, msgCol, addrCol });
+
+    for (const r of rows) {
+      const t = String(r[timeCol] || "").trim();
+      const msg = String(r[msgCol] || "").trim();
+      const addr = String(r[addrCol] || "").trim();
+      const mins = toMinutes(t);
+      if (!isNaN(mins) && msg) {
+        z3Events.push({
+          timeText: t,
+          minutes: mins,
+          desc: addr ? `${msg} (${addr})` : msg,
+          fileId: f.id,
+          fileName: f.name,
+        });
+      }
+    }
+  }
+
+console.log("✅ Total événements Z3 chargés :", z3Events.length);
+
+// ✅ Aligne l'ordre logique : DOM des événements <-> z3Events
+z3Events.sort((a, b) => a.minutes - b.minutes);
+
+renderZ3List();
+highlightZ3Near(currentRowMinutes(0));
+
+}
+function updateZ3Intensity(currentMinutes) {
+  const RANGE = 15;          // influence ±15 min autour
+  const MAX_INTENSITY = 4;   // 0→4 correspond aux niveaux CSS
+
+  const allItems = Array.from(document.querySelectorAll("#z3List .z3Item, #z3List .hour-mark"));
+  if (!allItems.length) return;
+
+  allItems.forEach(el => {
+    let minutes;
+    if (el.classList.contains("hour-mark")) {
+      minutes = toMinutes(el.querySelector(".t")?.textContent);
+    } else {
+      const idx = parseInt(el.dataset.evIndex || "-1");
+      minutes = z3Events[idx]?.minutes ?? NaN;
+    }
+
+    if (isNaN(minutes)) {
+      el.dataset.intensity = 0;
+      return;
+    }
+
+    const diff = Math.abs(minutes - currentMinutes);
+    const ratio = 1 - Math.min(diff / RANGE, 1);
+    const level = Math.round(ratio * MAX_INTENSITY);
+    el.dataset.intensity = level;
+  });
+  allItems.forEach(el => {
+    let minutes;
+    if (el.classList.contains("hour-mark")) {
+      minutes = toMinutes(el.querySelector(".t")?.textContent);
+    } else {
+      const idx = parseInt(el.dataset.evIndex || "-1");
+      minutes = z3Events[idx]?.minutes ?? NaN;
+    }
+
+    if (isNaN(minutes)) {
+      el.dataset.intensity = 0;
+      return;
+    }
+
+    const diff = Math.abs(minutes - currentMinutes);
+    const ratio = 1 - Math.min(diff / RANGE, 1);
+    const level = Math.round(ratio * MAX_INTENSITY);
+    el.dataset.intensity = level;
+  });
+
+  // 🔹 Lisibilité dynamique : texte clair sur fond sombre
+  allItems.forEach(el => {
+    const style = getComputedStyle(el);
+    const bg = style.backgroundColor;
+
+    // Convertit la couleur en luminance relative (perceptuelle)
+    const rgb = bg.match(/\d+/g)?.map(Number) || [255,255,255];
+    const luminance = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
+
+    // Détermine couleur texte : clair si fond sombre
+    el.style.color = luminance < 0.5 ? "var(--text-light)" : "var(--text-dark)";
+  });
+}
+
+
+
+
+
+
+
+
+
+
+
+
+// 🔁 Version alignée : z3Events trié + repères 15 min intercalés
+function renderZ3List() {
+  const box = document.getElementById("z3List");
+  box.innerHTML = "";
+
+  if (!z3Events.length) {
+    box.innerHTML = `<div class="z3Item" style="opacity:.7;cursor:default;">
+      <span class="t">--:--</span><span class="d">Aucun événement Z3</span>
+    </div>`;
+    return;
+  }
+
+  // Repères horaires 00:00 → 23:45 (toutes les 15 min)
+  const timeMarks = [];
+  for (let h = 0; h < 24; h++) {
+    for (let q = 0; q < 60; q += 15) {
+      const hh = String(h).padStart(2, "0");
+      const mm = String(q).padStart(2, "0");
+      timeMarks.push(`${hh}:${mm}`);
+    }
+  }
+
+  // z3Events est DÉJÀ TRIÉ par minutes
+  let evIdx = 0;
+
+  for (const mark of timeMarks) {
+    const markMin = toMinutes(mark);
+
+    // Ligne de repère
+    const markDiv = document.createElement("div");
+    markDiv.className = "z3Item hour-mark";
+    markDiv.innerHTML = `<span class="t">${mark}</span><span class="d"></span>`;
+    box.appendChild(markDiv);
+
+    // Ajoute tous les événements qui tombent dans ce quart d'heure
+    while (evIdx < z3Events.length && z3Events[evIdx].minutes < markMin + 15) {
+      const ev = z3Events[evIdx];
+      const div = document.createElement("div");
+      div.className = "z3Item";
+      // stocke l’index logique de l’événement (optionnel mais utile)
+      div.dataset.evIndex = String(evIdx);
+      div.innerHTML = `<span class="t">${ev.timeText}</span><span class="d">${ev.desc}</span>`;
+      div.onclick = () => jumpSliderToClosest(ev.minutes);
+      box.appendChild(div);
+      evIdx++;
+    }
+
+    if (evIdx >= z3Events.length) break; // plus d'événements : on peut s’arrêter tôt
+  }
+}
+
+
+
+
+function highlightZ3Near(targetMinutes) {
+  // Nettoie tout
+  document.querySelectorAll("#z3List .z3Item").forEach(el => el.classList.remove("active"));
+  if (isNaN(targetMinutes) || !z3Events.length) return;
+
+  // Trouve l’index de l’événement le plus proche
+  let bestIdx = -1, bestDiff = Infinity;
+  z3Events.forEach((ev, idx) => {
+    const diff = Math.abs(ev.minutes - targetMinutes);
+    if (diff < bestDiff) { bestDiff = diff; bestIdx = idx; }
+  });
+
+  // Tolérance
+  if (bestIdx === -1 || bestDiff > Z3_HILITE_TOL_MIN) return;
+
+  // Récupère la N-ième tuile événement (en ignorant les repères)
+  const eventItems = Array.from(document.querySelectorAll("#z3List .z3Item"))
+    .filter(el => !el.classList.contains("hour-mark"));
+
+  const el = eventItems[bestIdx];
+  if (el) {
+    el.classList.add("active");
+
+    // Scroll dans la vue si besoin
+    const box = document.getElementById("z3List");
+    const boxRect = box.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    if (elRect.top < boxRect.top || elRect.bottom > boxRect.bottom) {
+      box.scrollTop = el.offsetTop - box.clientHeight / 2 + el.clientHeight / 2;
+    }
+  }
+} // ✅ cette accolade ferme bien la fonction entière
+
+
+
+
+
+
+
+function jumpSliderToClosest(targetMinutes){
+  if(!csvData.length) return;
+  let bestIdx = 0, bestDiff = Infinity;
+  for(let i=0;i<csvData.length;i++){
+    const mins = minutesFromRowTime(csvData[i]);
+    if(isNaN(mins)) continue;
+    const diff = Math.abs(mins - targetMinutes);
+    if(diff < bestDiff){ bestDiff = diff; bestIdx = i; }
+  }
+  const slider = document.getElementById("slider");
+  slider.value = String(bestIdx);
+  lastSliderIndex = bestIdx;
+  updateGrid(bestIdx);
+  highlightZ3Near(currentRowMinutes(bestIdx));
+}
+
+/* ============ Ajout différé des cases spéciales (inchangé sauf position) ============ */
+function addSpecialsAfterCSV() {
+  const normalize = s => (s || "").normalize("NFD").replace(/[^\w]/g, "").toLowerCase();
+
+  // Détection ultra tolérante
+  const hasExt   = headers.some(h => normalize(h).includes("tcext") || normalize(h).includes("temperatureexterieure") || normalize(h).includes("tempext"));
+  const hasDebit = headers.some(h => normalize(h).includes("debit") || normalize(h).includes("debitth") || normalize(h).includes("dbit") || normalize(h).includes("tonne"));
+  const hasGaz   = headers.some(h => normalize(h).includes("gaz"));
+  const hasNorm  = headers.some(h => normalize(h).includes("normalis"));
+  const hasIpe   = headers.some(h => normalize(h).includes("ipe") || normalize(h).includes("ip") || normalize(h).includes("ipekwh"));
+
+  const specials = [
+    // 🔸 Sondes internes
+    { id: "SondeACsup", label: "Air chaud Supérieur", col: "G", row: 4 },
+    { id: "SondeACinf", label: "Air chaud Inférieur", col: "G", row: 10 },
+    { id: "TempGrain",  label: "Température Grain",   col: "P", row: 7 },
+    { id: "TempExt",    label: "Température Extérieure 🌡️", col: "E", row: 10, optional: true, active: hasExt },
+
+    // 🔸 Nouvelles cases de suivi
+    { id: "DebitTH",   label: "Débit Séchage", col: "D", row: 7, optional: true, bg: "#00CCFF", active: hasDebit },
+    { id: "GazM3H",    label: "🔥 GAZ",        col: "D", row: 8, optional: true, bg: "#FFCC33", active: hasGaz },
+    { id: "Normalise", label: "🔥 GAZ",        col: "D", row: 9, optional: true, bg: "#FFCC33", active: hasNorm },
+    { id: "IPE",       label: "🔥 Ipé",        col: "D", row:10, optional: true, bg: "#33FF00", active: hasIpe }
+  ];
+
+  // 🔸 Nouveaux compteurs et chronos
+  const hasMinuterie  = headers.some(h => normalize(h).includes("minuterie"));
+  const hasModulee    = headers.some(h => normalize(h).includes("modulee"));
+  const hasCumul      = headers.some(h => normalize(h).includes("cumul"));
+  const hasExtract    = headers.some(h => normalize(h).includes("extraction"));
+  const hasCptTotal   = headers.some(h => normalize(h).includes("cptkwh") && normalize(h).includes("total"));
+  const hasCptLot     = headers.some(h => normalize(h).includes("cptkwh") && normalize(h).includes("lot"));
+
+  specials.push(
+    { id: "Minuterie", label: "Minuterie", col: "R", row: 7, optional: true, active: hasMinuterie, unit: "s", bg: "#ccffcc" },   // vert clair
+    { id: "Modulee",   label: "Modulée",   col: "R", row: 8, optional: true, active: hasModulee,   unit: "s", bg: "#cce5ff" },   // bleu clair
+    { id: "Cumul",     label: "Cumul",     col: "R", row: 9, optional: true, active: hasCumul,     unit: "t", bg: "#ccffcc" },   // vert clair
+    { id: "NbExtract", label: "Nb Extraction", col: "R", row: 10, optional: true, active: hasExtract, bg: "#ccffcc" },            // vert clair
+    { id: "CptTotal",  label: "Compteur kWh Total", col: "B", row: 8, optional: true, active: hasCptTotal, unit: "kWh", bg: "#FFCC33" }, // jaune gaz
+    { id: "CptLot",    label: "Compteur kWh Lot", col: "B", row: 9, optional: true, active: hasCptLot, unit: "kWh", bg: "#FFCC33" }     // jaune gaz
+  );
+
+
+  
+  function colIdx(letter){ return letter.toUpperCase().charCodeAt(0) - 64; }
+
+  function placeSpecial(s){
+    const col = colIdx(s.col);
+    const row = s.row;
+    const d = document.createElement("div");
+    d.className = "sonde special";
+    d.id = s.id;
+    if (s.bg) d.style.background = s.bg;
+    d.innerHTML = `
+      <div class="label">${s.label}</div>
+      <div class="consigne">--</div>
+      <div class="val">--</div>`;
+    const target = (row <= 6) ? document.getElementById("gridTop") : document.getElementById("gridBottom");
+    d.style.gridColumn = `${col} / span 1`;
+    d.style.gridRow = `${row <= 6 ? row : row - 6} / span 1`;
+    target.appendChild(d);
+  }
+
+  specials.forEach(s => { if (!s.optional || s.active) placeSpecial(s); });
+}
+
+/* =================== Responsive : calcule la taille de case =================== */
+function updateTileSize(){
+  const wrap = document.getElementById("gridWrap");
+  const cols = 22;
+  const rows = 12;
+  const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell-gap'))||8;
+  const splitGapRatio = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--split-gap'))||0.3;
+
+  const availW = wrap.clientWidth - 32;   // marges internes
+  const availH = wrap.clientHeight - 16;
+
+  const totalVCellGaps = (6-1) + (6-1); // 10
+  const hByW = (availW - (cols-1)*gap) / cols;
+  const hByH = (availH - totalVCellGaps*gap) / (rows + splitGapRatio); 
+  const s = Math.max(60, Math.floor(Math.min(hByW, hByH))); // taille min 60px
+
+  document.documentElement.style.setProperty('--tile-size', s + 'px');
+}
+
+/* =================== CSV (Drive ou LocalStorage) =================== */
+// === Helper encodage intelligent ===
+function decodeSmart(arrayBuffer) {
+  let txt = new TextDecoder("utf-8", { fatal: false }).decode(arrayBuffer);
+  if (txt.includes("Ã") || txt.includes("Â") || txt.includes("�")) {
+    try {
+      txt = new TextDecoder("iso-8859-1").decode(arrayBuffer);
+    } catch (e) {
+      console.warn("Erreur de décodage ISO-8859-1", e);
+    }
+  }
+  return txt;
+}
+
+
+  
+  async function loadCSV(){
+  const list = JSON.parse(localStorage.getItem("csvFilesList") || "[]");
+  const idx = parseInt(localStorage.getItem("csvFileIndex") || "0");
+  let file = list.find(f => f.id === fileId) || list[idx] || null;
+  let text = "";
+
+  // 1️⃣ Si le CSV est déjà présent en mémoire → on l'utilise
+  if (file && file.content) {
+    console.log("📦 CSV trouvé dans localStorage :", file.name);
+    text = file.content;
+  } 
+  // 2️⃣ Sinon, on le télécharge depuis le proxy Netlify (comme avant)
+  else if (file && file.id) {
+  const url = `https://smes21540.netlify.app/.netlify/functions/drive?id=${file.id}&name=${encodeURIComponent(file.name || "")}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Erreur proxy Drive");
+
+    // ✅ Lecture et décodage du contenu
+    const buf = await res.arrayBuffer();
+    text = decodeSmart(buf);
+    console.log("🧾 Taille du fichier Drive :", text.length, "caractères");
+
+    console.log("🌐 CSV téléchargé depuis Drive :", file.name);
+
+    // ✅ Sauvegarde pour usage futur
+    const updated = list.map(f => f.id === file.id ? { ...f, content: text } : f);
+    localStorage.setItem("csvFilesList", JSON.stringify(updated));
+  } catch (err) {
+    console.error("❌ Erreur chargement CSV :", err);
+    document.getElementById("gridTop").innerHTML = `<b style='color:red'>❌ Impossible de charger le CSV</b>`;
+    return;
+  }
+}
+ else {
+    console.error("⚠️ Aucun fichier CSV valide trouvé.");
+    document.getElementById("gridTop").innerHTML = `<b style='color:red'>❌ Aucun CSV valide trouvé</b>`;
+    return;
+  }
+
+  // 3️⃣ Parsing du CSV
+  const seen = {};
+  const results = Papa.parse(text, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (h) => {
+      h = (h || "").replace(/"/g, "").trim();
+      if (seen[h]) {
+        seen[h]++;
+        return h + "_" + seen[h];
+      } else {
+        seen[h] = 1;
+        return h + "_1";
+      }
+    },
+  });
+
+  headers = results.meta.fields || [];
+  csvData = results.data || [];
+// 🗓️ Détecte le jour courant
+const m = (file.name || "").match(/(\d{8})/);
+currentDay = m ? m[1] : null;
+if (currentDay) mergedDays.add(currentDay);
+
+  const lc = document.getElementById("lineCount");
+  if (lc)
+    lc.textContent =
+      (csvData?.length || 0) +
+      " ligne" +
+      ((csvData?.length || 0) > 1 ? "s" : "");
+  document.getElementById("slider").max = Math.max(
+    0,
+    (csvData.length || 1) - 1
+  );
+
+  const minInit = parseFloat(localStorage.getItem("scaleMin") || "30");
+  const maxInit = parseFloat(localStorage.getItem("scaleMax") || "55");
+  document.getElementById("minInput").value = isNaN(minInit) ? 30 : minInit;
+  document.getElementById("maxInput").value = isNaN(maxInit) ? 60 : maxInit;
+
+  // 4️⃣ Ajout des cases spéciales et affichage initial
+  addSpecialsAfterCSV();
+  updateGrid(0);
+
+  // 5️⃣ Les fichiers Z3 → uniquement depuis localStorage
+  loadZ3ForSameDay();
+}
+
+
+
+/* =================== Couleurs =================== */
+function getScale(){
+  let min=parseFloat(document.getElementById("minInput").value);
+  let max=parseFloat(document.getElementById("maxInput").value);
+  if(!isFinite(min)) min=30;
+  if(!isFinite(max)) max=60;
+  if(max<=min) max=min+1;
+  return {min,max};
+}
+function getColor(v){
+  const {min,max}=getScale();
+  let t=(v-min)/(max-min); t=Math.max(0,Math.min(1,t));
+  if(t<0.5){const r=t/0.5;return `rgb(0,${Math.round(150+105*r)},${Math.round(255-255*r)})`;}
+  else if(t<0.75){const r=(t-0.5)/0.25;return `rgb(${Math.round(255*r)},255,0)`;}
+  else if(t<0.9){const r=(t-0.75)/0.15;return `rgb(255,${Math.round(255-90*r)},0)`;}
+  else{const r=(t-0.9)/0.1;return `rgb(255,${Math.round(165-165*r)},0)`;}
+}
+
+/* =================== Actualisation d’une ligne =================== */
+function updateGrid(idx){
+  if(!csvData[idx]) return;
+  lastSliderIndex = idx;
+  const row = csvData[idx];
+
+  // Date/Heure
+  const dateKey=headers.find(h=>(h||"").toLowerCase().includes("date"));
+  const timeKey=headers.find(h=>{
+    const a=(h||"").toLowerCase();
+    return a.includes("heure")||a.includes("time")||a==="h";
+  });
+  let dt=""; 
+  if(dateKey&&row[dateKey]) dt+=String(row[dateKey]); 
+  if(timeKey&&row[timeKey]) dt+=(dt?" — ":"")+String(row[timeKey]);
+  document.getElementById("datetimeLabel").textContent = dt||"";
+
+  // === Sondes normales ===
+  const allCells = document.querySelectorAll('.sonde:not(.special)');
+  allCells.forEach(div=>{
+    const n = div.id.replace("sonde","").padStart(2,"0");
+    const consCol = "Sonde"+n+"_1";
+    const valCol  = "Sonde"+n+"_2";
+    const cons = parseFloat(row[consCol]);
+    const val  = parseFloat(row[valCol]);
+    div.querySelector(".consigne").textContent = isNaN(cons) ? "-- °C" : cons.toFixed(1)+" °C";
+    const vdiv = div.querySelector(".val");
+    if(!isNaN(val)){
+      vdiv.textContent=val.toFixed(1)+" °C"; 
+      div.style.background=getColor(val);
+    } else {
+      vdiv.textContent="-- °C"; 
+      div.style.background="#eee";
+    }
+  });
+
+  // 🔸 Fonction générique pour les cases spéciales
+  function updateSpecial(label, id, opts = {}) {
+    const { altLabels = [], prefer = [] } = opts;
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const norm = s => (s || "").normalize("NFD").replace(/[^\w]/g, "").toLowerCase();
+    const wanted  = [label, ...altLabels].map(norm);
+    const prefers = (prefer || []).map(norm);
+
+    // --- Recherche colonne exacte ---
+    let valCol = null;
+    for (const h of headers) {
+      const n = norm(h);
+      if (prefers.some(p => n === p || n.includes(p))) { valCol = h; break; }
+    }
+    if (!valCol) {
+      for (const h of headers) {
+        const n = norm(h);
+        if (wanted.some(w => n.includes(w))) { valCol = h; break; }
+      }
+    }
+
+    const val = valCol ? parseFloat(row[valCol]) : NaN;
+
+    // --- Unités auto ---
+    let unit = "°C";
+    const L = norm(label);
+    if (L.includes("debit")) unit = "t/h";
+    else if (L.includes("gaz") && !L.includes("normal")) unit = "m³/h";
+    else if (L.includes("normal")) unit = "Nm³/h";
+    else if (L.includes("ip")) unit = "kWh/tee";
+
+// 🔸 Priorité à l’unité personnalisée (spéciale)
+if (opts.unit) unit = opts.unit;
+
+// 🔸 Format d'affichage selon la nature de la donnée
+let decimals = 1;
+let formatAsTime = false;
+
+if (["minuterie", "modulee"].some(k => L.includes(k))) {
+  formatAsTime = true; // affichage mm:ss
+  unit = ""; // pas de °C ni de 's'
+} else if (L.includes("nbextract")) {
+  decimals = 0;
+  unit = "";
+} else if (L.includes("cumul")) {
+  decimals = 1;
+  unit = opts.unit || "t";
+}
+
+
+    // --- Style valeur ---
+    const vdiv = el.querySelector(".val");
+    vdiv.style.fontSize = "clamp(11px, calc(var(--tile-size)*0.13), 17px)";
+    if (isNaN(val)) {
+  vdiv.textContent = `-- ${unit}`;
+} else if (formatAsTime) {
+  const total = Math.max(0, Math.round(val));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  vdiv.textContent = `${m}:${s.toString().padStart(2, "0")}`;
+} else {
+  vdiv.textContent = `${val.toFixed(decimals)} ${unit}`;
+}
+
+
+
+    // --- Consignes ACsup/ACinf/Grain (comme avant) ---
+    const consEl = el.querySelector(".consigne");
+    if (L.includes("acsup") || L.includes("acinf") || L.includes("grain")) {
+      let consCol = null, valCol2 = null, count = 0;
+      for (const h of headers) {
+        const n = norm(h);
+        if (n.includes(norm(label))) {
+          count++;
+          if (count === 1) consCol = h;
+          if (count === 2) valCol2 = h;
+        }
+      }
+      const consVal = consCol ? parseFloat(row[consCol]) : NaN;
+      const valVal  = valCol2 ? parseFloat(row[valCol2]) : NaN;
+      consEl.style.display = "block";
+      consEl.textContent = isNaN(consVal) ? "-- °C" : `${consVal.toFixed(1)} °C`;
+      vdiv.textContent = isNaN(valVal) ? "-- °C" : `${valVal.toFixed(1)} °C`;
+      if (!isNaN(valVal)) el.style.background = getColor(valVal);
+    } else {
+      consEl.style.display = "none";
+    }
+  }
+
+  // 🔹 Appels
+  updateSpecial("Sonde AC sup", "SondeACsup");
+  updateSpecial("Sonde AC inf", "SondeACinf");
+  updateSpecial("Temp Grain",    "TempGrain");
+  updateSpecial("T°C Ext",       "TempExt", {
+    altLabels: ["Temperature Exterieure", "Temp Ext", "TC Ext", "T C Ext"]
+  });
+
+  // 🔹 Suivis (1 seule colonne)
+  updateSpecial("Débit", "DebitTH", {
+    altLabels: ["D bit t/h", "Débit T/H", "Débit (Tonnes / Heure)"],
+    prefer: ["dbitth"]
+  });
+  updateSpecial("Gaz", "GazM3H", {
+    altLabels: ["Gaz m3/h", "GAZ M3/H", "Consommation (m3 / Heure)"],
+    prefer: ["gazm3h"]
+  });
+  updateSpecial("Normalisé", "Normalise", {
+    altLabels: ["Normalis", "Normalisé", "Consommation (Nm3 / Heure)"],
+    prefer: ["normalis"]
+  });
+  updateSpecial("Ipé", "IPE", {
+    altLabels: ["Ip", "Ipe", "Ipé (kWh/tee)", "IPE"],
+    prefer: ["ip"]
+  });
+
+   // Nouveaux suivis process
+  updateSpecial("Minuterie", "Minuterie", { altLabels: ["Minuterie"], prefer: ["minuterie"] });
+  updateSpecial("Modulée",   "Modulee",   { altLabels: ["Modulee"], prefer: ["modulee"] });
+  updateSpecial("Cumul",     "Cumul",     { altLabels: ["Cumul"], prefer: ["cumul"] });
+  updateSpecial("Nb Extraction", "NbExtract", { altLabels: ["Extractions"], prefer: ["extraction"] });
+  updateSpecial("Compteur kWh Total", "CptTotal", { altLabels: ["CPT KWH TOTAL"], prefer: ["cptkwhtotal"], unit: "kWh" });
+  updateSpecial("Compteur kWh Lot", "CptLot", { altLabels: ["CPT KWH LOT"], prefer: ["cptkwhlot"], unit: "kWh" });
+ 
+
+  // ➕ Surligne l'event Z3 le plus proche de l'heure courante
+  const mins = minutesFromRowTime(row);
+  updateZ3Intensity(mins);
+
+  highlightZ3Near(mins);
+}
+
+/* =================== Listeners =================== */
+window.addEventListener("resize", updateTileSize);
+document.getElementById("slider").addEventListener("input", async e => {
+  const idx = parseInt(e.target.value)||0;
+  updateGrid(idx);
+document.getElementById("slider").max = csvData.length - 1;
+
+  // Détection bord du slider → fusion
+  const slider = e.target;
+
+});
+
+document.getElementById("minInput").addEventListener("change", ()=>{
+  const v=parseFloat(document.getElementById("minInput").value);
+  localStorage.setItem("scaleMin", isFinite(v)?String(v):"30");
+  if(csvData.length) updateGrid(parseInt(document.getElementById("slider").value)||0);
+});
+document.getElementById("maxInput").addEventListener("change", ()=>{
+  const v=parseFloat(document.getElementById("maxInput").value);
+  localStorage.setItem("scaleMax", isFinite(v)?String(v):"60");
+  if(csvData.length) updateGrid(parseInt(document.getElementById("slider").value)||0);
+});
+
+/* =================== Boutons de navigation multi-jours =================== */
+document.getElementById("btnPrevDay").addEventListener("click", async () => {
+  await mergeNeighborDay(-1);
+  refreshLoadedDaysLabel();
+});
+
+document.getElementById("btnNextDay").addEventListener("click", async () => {
+  await mergeNeighborDay(1);
+  refreshLoadedDaysLabel();
+});
+
+/* 🎬 Mode LIVE (recharge depuis Google Drive sans F5) */
+const playBtn = document.getElementById("btnPlay");
+let liveInterval = null;
+let tickCount = 0; // ✅ compteur global ajouté
+
+playBtn.addEventListener("click", async () => {
+  const slider = document.getElementById("slider");
+
+  // Positionne sur la dernière ligne connue
+  slider.value = slider.max;
+  updateGrid(parseInt(slider.value));
+  highlightZ3Near(currentRowMinutes(slider.value));
+
+  // 🔁 Active / désactive le mode Live
+  if (liveInterval) {
+    clearInterval(liveInterval);
+    liveInterval = null;
+    playBtn.classList.remove("active");
+    playBtn.textContent = "▶️";
+    playBtn.title = "Mode lecture automatique (désactivé)";
+    console.log("⏹️ Mode Live désactivé");
+  } else {
+    playBtn.classList.add("active");
+    playBtn.textContent = "⏸️";
+    playBtn.title = "Lecture en direct — mise à jour Drive toutes les minutes";
+    console.log("▶️ Mode Live activé");
+
+    // Recharge immédiate une fois
+    await refreshFromDrive();
+
+    // Puis toutes les 5 secondes (pour test)
+    liveInterval = setInterval(async () => {
+      tickCount++;
+      console.log(`⏱️ Tick ${tickCount} — refreshFromDrive()`);
+      await refreshFromDrive();
+    }, 5000);
+  }
+});
+
+
+/* 📡 Mode LIVE intelligent : recharge uniquement les nouvelles lignes */
+async function refreshFromDrive() {
+  if (!fileId) return;
+  try {
+    console.log("🔄 Vérification du CSV sur Drive...");
+    const url = `https://smes21540.netlify.app/.netlify/functions/drive?id=${fileId}&name=${encodeURIComponent(fileName || "")}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Erreur proxy Drive");
+    const buf = await res.arrayBuffer();
+    const text = decodeSmart(buf);
+
+    // Même parsing que loadCSV (garde les bons noms de colonnes)
+    const seen = {};
+    const parsed = Papa.parse(text, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (h) => {
+        h = (h || "").replace(/"/g, "").trim();
+        if (seen[h]) {
+          seen[h]++;
+          return h + "_" + seen[h];
+        } else {
+          seen[h] = 1;
+          return h + "_1";
+        }
+      },
+    });
+
+    const newData = parsed.data || [];
+    const newHeaders = parsed.meta.fields || [];
+
+    // Compare ancien / nouveau
+    const oldLen = csvData.length;
+    const newLen = newData.length;
+
+    if (newLen > oldLen) {
+      const added = newLen - oldLen;
+      const newRows = newData.slice(oldLen);
+      csvData.push(...newRows);
+      console.log(`🟢 ${added} nouvelles lignes ajoutées (${newLen} total)`);
+
+      // Met à jour le slider et la ligne count
+      const slider = document.getElementById("slider");
+      slider.max = csvData.length - 1;
+      slider.value = slider.max;
+      document.getElementById("lineCount").textContent = csvData.length + " lignes";
+
+      // Rafraîchit la grille
+      updateGrid(parseInt(slider.value));
+      highlightZ3Near(currentRowMinutes(slider.value));
+
+      // 💡 effet visuel léger sur la barre
+      const bar = document.getElementById("timeBar");
+      bar.classList.add("pulse");
+      setTimeout(() => bar.classList.remove("pulse"), 400);
+    } else {
+      console.log("⏸️ Aucune nouvelle ligne détectée.");
+    }
+
+    // En cas de changement de structure (très rare)
+    if (JSON.stringify(newHeaders) !== JSON.stringify(headers)) {
+      headers = newHeaders;
+      console.warn("⚠️ En-têtes modifiés, mise à jour forcée.");
+      updateGrid(parseInt(document.getElementById("slider").value));
+    }
+  } catch (err) {
+    console.error("❌ Erreur Live :", err);
+  }
+}
+
+
+
+  
+function refreshLoadedDaysLabel() {
+  const sorted = [...mergedDays].sort();
+  const label = sorted.map(d => `${d.slice(6,8)}/${d.slice(4,6)}`).join(" — ");
+  const el = document.getElementById("loadedDaysLabel");
+  if (el) el.textContent = "Jours visibles : " + label;
+}
+
+
+/* =================== INIT =================== */
+
+  /* ----------- Thèmes + persistance ----------- */
+function setTheme(theme){
+  const r=document.documentElement;
+  localStorage.setItem("selectedTheme",theme);
+
+  if(theme==="orange"){
+    r.style.setProperty("--accent","#ff7043");
+    r.style.setProperty("--accent-darker","#e64a19");
+    r.style.setProperty("--accent-muted","#ffccbc");
+    r.style.setProperty("--bg","#fff5f5");
+    r.style.setProperty("--panel","#ffffff");
+    r.style.setProperty("--sidebar-bg","#ffe5d9");
+    r.style.setProperty("--danger","#d84315");
+    r.style.setProperty("--text","#333");
+    r.style.setProperty("--row-even","#ffe5d9");
+    r.style.setProperty("--row-odd","#fff5f5");
+    r.style.setProperty("--text-light", "#fff");
+r.style.setProperty("--text-dark", "#222");
+
+  }
+  if(theme==="blue"){
+    r.style.setProperty("--accent","#2196f3");
+    r.style.setProperty("--accent-darker","#1976d2");
+    r.style.setProperty("--accent-muted","#bbdefb");
+    r.style.setProperty("--bg","#e3f2fd");
+    r.style.setProperty("--panel","#ffffff");
+    r.style.setProperty("--sidebar-bg","#bbdefb");
+    r.style.setProperty("--danger","#0d47a1");
+    r.style.setProperty("--text","#0d47a1");
+    r.style.setProperty("--row-even","#bbdefb");
+    r.style.setProperty("--row-odd","#e3f2fd");
+    r.style.setProperty("--text-light", "#fff");
+r.style.setProperty("--text-dark", "#222");
+
+  }
+  if(theme==="green"){
+    r.style.setProperty("--accent","#4caf50");
+    r.style.setProperty("--accent-darker","#2e7d32");
+    r.style.setProperty("--accent-muted","#c8e6c9");
+    r.style.setProperty("--bg","#f1f8e9");
+    r.style.setProperty("--panel","#ffffff");
+    r.style.setProperty("--sidebar-bg","#c8e6c9");
+    r.style.setProperty("--danger","#1b5e20");
+    r.style.setProperty("--text","#1b5e20");
+    r.style.setProperty("--row-even","#c8e6c9");
+    r.style.setProperty("--row-odd","#f1f8e9");
+    r.style.setProperty("--text-light", "#fff");
+r.style.setProperty("--text-dark", "#222");
+
+  }
+  if(theme==="purple"){
+    r.style.setProperty("--accent","#9c27b0");
+    r.style.setProperty("--accent-darker","#6a1b9a");
+    r.style.setProperty("--accent-muted","#e1bee7");
+    r.style.setProperty("--bg","#f3e5f5");
+    r.style.setProperty("--panel","#ffffff");
+    r.style.setProperty("--sidebar-bg","#e1bee7");
+    r.style.setProperty("--danger","#4a148c");
+    r.style.setProperty("--text","#4a148c");
+    r.style.setProperty("--row-even","#e1bee7");
+    r.style.setProperty("--row-odd","#f3e5f5");
+    r.style.setProperty("--text-light", "#fff");
+r.style.setProperty("--text-dark", "#222");
+
+  }
+  if(theme==="bordeaux"){
+    r.style.setProperty("--accent","#800020");
+    r.style.setProperty("--accent-darker","#4b0014");
+    r.style.setProperty("--accent-muted","#d7a1a9");
+    r.style.setProperty("--bg","#fff0f2");
+    r.style.setProperty("--panel","#ffffff");
+    r.style.setProperty("--sidebar-bg","#f3cdd3");
+    r.style.setProperty("--danger","#600018");
+    r.style.setProperty("--text","#4b0014");
+    r.style.setProperty("--row-even","#f3cdd3");
+    r.style.setProperty("--row-odd","#fff0f2");
+    r.style.setProperty("--text-light", "#fff");
+r.style.setProperty("--text-dark", "#222");
+
+  }
+
+  r.style.setProperty("--text-light", "#fff");
+  r.style.setProperty("--text-dark", "#222");
+
+}
+
+  const savedTheme = localStorage.getItem("selectedTheme") || "orange";
+setTheme(savedTheme);
+
+
+  
+document.addEventListener("DOMContentLoaded", async () => {
+  await ensureZ3FilesLoaded();
+  loadPlan();
+  requestAnimationFrame(updateTileSize);
+  loadCSV();
+  refreshLoadedDaysLabel();
+  window.addEventListener("load", updateTileSize);
+});
+
+async function mergeNeighborDay(offset) {
+  if (!currentDay || isMerging) return;
+  isMerging = true;
+
+// 🔹 Utilise le dernier jour fusionné comme référence
+let refDay = [...mergedDays].sort().pop() || currentDay;
+const y = parseInt(refDay.slice(0,4));
+const m = parseInt(refDay.slice(4,6))-1;
+const d = parseInt(refDay.slice(6,8));
+const base = new Date(y,m,d);
+base.setDate(base.getDate()+offset);
+const nextDay = base.toISOString().slice(0,10).replace(/-/g,"");
+
+
+  if (mergedDays.has(nextDay)) {
+    console.log("⚠️ Jour déjà fusionné :", nextDay);
+    isMerging = false;
+    return;
+  }
+
+  console.log(`⏳ Chargement du fichier voisin SA00001_${nextDay}.csv...`);
+  const list = JSON.parse(localStorage.getItem("csvFilesList")||"[]");
+  const neighbor = list.find(f => f.name.includes(nextDay));
+  if (!neighbor) {
+    console.warn("⚠️ Aucun fichier voisin trouvé pour", nextDay);
+    isMerging = false;
+    return;
+  }
+
+    try {
+    const url = `https://smes21540.netlify.app/.netlify/functions/drive?id=${neighbor.id}&name=${encodeURIComponent(neighbor.name)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Erreur proxy Drive");
+    const buf = await res.arrayBuffer();
+    const text = decodeSmart(buf);
+    const parsed = Papa.parse(text,{header:true,skipEmptyLines:true});
+    const data = parsed.data||[];
+
+    csvData = csvData.concat(data);
+    document.getElementById("slider").max = csvData.length-1;
+    mergedDays.add(nextDay);
+
+    console.log(`✅ Fichier fusionné : ${neighbor.name} (${data.length} lignes)`);
+    console.log(`📊 Fusion réussie → ${csvData.length} lignes au total`);
+    console.log(`🔍 Recherche Z3 du voisin ${nextDay} →`);
+    await mergeZ3ForDay(nextDay);
+
+// 🔁 === RECHARGEMENT COMPLET APRÈS FUSION MULTI-JOURS ===
+console.log("♻️ Rafraîchissement complet : reconstruction complète de la page");
+buildGrid();              // Recrée toute la grille (haut + bas)
+addSpecialsAfterCSV();    // Réinjecte les cases spéciales
+updateGrid(lastSliderIndex);  // Affiche la dernière ligne active fusionnée
+renderZ3List();           // Reconstruit le panneau d’événements Z3
+highlightZ3Near(currentRowMinutes(lastSliderIndex)); // Surligne événement le plus proche
+updateTileSize();         // Recalcule la taille responsive
+
+
+  } catch(err) {
+    console.error("❌ Erreur fusion jour", err);
+  }
+
+  isMerging = false;
+
+}
+// 🟢 Fonction déplacée ici (à l’extérieur)
+async function mergeZ3ForDay(dayStr) {
+  const z3Files = await ensureZ3FilesLoaded();
+  const sameDay = z3Files.filter(f => f.name.includes(dayStr));
+  if (!sameDay.length) {
+    console.log(`⚠️ Aucun fichier Z3 trouvé pour ${dayStr}`);
+    return;
+  }
+
+  for (const f of sameDay) {
+    try {
+      console.log("🌐 Téléchargement Z3 voisin :", f.name);
+      const url = `https://smes21540.netlify.app/.netlify/functions/drive?id=${f.id}&name=${encodeURIComponent(f.name || "")}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Erreur proxy Drive");
+      const buf = await res.arrayBuffer();
+      const text = decodeSmart(buf);
+
+
+// 🧾 Debug : taille du fichier récupéré sur Drive
+console.log("🧾 Taille du fichier Drive :", text.length, "caractères");
+
+      
+      const lines = text.split(/\r?\n/).filter(l => l.trim() !== "");
+      const startIndex = lines.findIndex(l => /trigger.?time|horodatage/i.test(l));
+      const csvClean = lines.slice(startIndex >= 0 ? startIndex : 0).join("\n");
+      const parsed = Papa.parse(csvClean, { header: true, skipEmptyLines: true });
+
+      const H = parsed.meta.fields || [];
+      const rows = parsed.data || [];
+
+      const timeCol = H.find(h => /(trigger.?time|heure|horodatage|time|temps)/i.test(h)) || H[0];
+      const msgCol  = H.find(h => /(message|desc|description|evenement|event)/i.test(h)) || H[1];
+      const addrCol = H.find(h => /(address|adresse|addr|zone|address ?1)/i.test(h)) || null;
+
+      for (const r of rows) {
+        const t = String(r[timeCol] || "").trim();
+        const msg = String(r[msgCol] || "").trim();
+        const addr = String(r[addrCol] || "").trim();
+        const mins = toMinutes(t);
+        if (!isNaN(mins) && msg) {
+          z3Events.push({
+            timeText: t,
+            minutes: mins,
+            desc: addr ? `${msg} (${addr})` : msg,
+            fileId: f.id,
+            fileName: f.name,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("❌ Erreur fusion Z3 du voisin :", f.name, err);
+    }
+  }
+
+  console.log(`✅ Fusion des événements Z3 du jour ${dayStr} terminée (${sameDay.length} fichier(s)).`);
+  z3Events.sort((a, b) => a.minutes - b.minutes);
+  renderZ3List();
+}
+
+
+
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
